@@ -1,0 +1,45 @@
+# Credentials and sensitive files
+credentials.py
+*.key
+*.secret
+
+# Python cache and temp files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+.pytest_cache/
+tmp/
+
+# Virtual environment
+venv/
+env/
+.env
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# macOS files
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# MugMatch specific
+mugmatch_cache/*
+*.tmp
+docs/
+utils/
+
+# Logs
+*.log
+debug.log
+
+# Backup files
+*.bak
+*.backup
