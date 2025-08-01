@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-SmugMug Album Operations - Album creation and management functionality v2.5
+SmugMug Album Operations - Album creation and management functionality v5.0
 File: smugmug_album_operations.py
 Contains the album creation and management methods separated from image copying
 """
@@ -21,10 +21,10 @@ class SmugMugAlbumOperations:
     def find_or_create_review_album(self, username: str) -> Optional[Dict]:
         """Find existing review album or create a new one"""
         try:
-            print(f"🔍 Finding or creating MugMatch review album for {username}")
+            print(f"🔍 Finding or creating SmugDups review album for {username}")
             
-            # Step 1: Check for existing MugMatch review albums
-            existing_album = self._find_existing_mugmatch_album(username)
+            # Step 1: Check for existing SmugDups review albums
+            existing_album = self._find_existing_smugdups_album(username)
             if existing_album:
                 return existing_album
             
@@ -35,22 +35,22 @@ class SmugMugAlbumOperations:
             print(f"❌ Error in find_or_create_review_album: {e}")
             return None
     
-    def _find_existing_mugmatch_album(self, username: str) -> Optional[Dict]:
-        """Look for existing MugMatch review albums"""
+    def _find_existing_smugdups_album(self, username: str) -> Optional[Dict]:
+        """Look for existing SmugDups review albums"""
         try:
-            print("   Checking for existing MugMatch albums...")
+            print("   Checking for existing SmugDups albums...")
             albums = self.api.get_user_albums(username)
             
-            mugmatch_albums = []
+            smugdups_albums = []
             for album in albums:
                 album_name = album.get('name', '').lower()
-                if ('mugmatch' in album_name and 'review' in album_name) or \
+                if ('smugdups' in album_name and 'review' in album_name) or \
                    ('duplicate' in album_name and 'review' in album_name):
-                    mugmatch_albums.append(album)
+                    smugdups_albums.append(album)
             
-            if mugmatch_albums:
+            if smugdups_albums:
                 # Use the most recent one (or first one found)
-                album = mugmatch_albums[0]
+                album = smugdups_albums[0]
                 album_info = {
                     'album_key': album['id'],
                     'album_name': album['name'],
@@ -58,10 +58,10 @@ class SmugMugAlbumOperations:
                     'image_count': album['image_count'],
                     'method': 'found_existing'
                 }
-                print(f"   ✅ Found existing MugMatch album: {album['name']}")
+                print(f"   ✅ Found existing SmugDups album: {album['name']}")
                 return album_info
             
-            print("   No existing MugMatch albums found")
+            print("   No existing SmugDups albums found")
             return None
             
         except Exception as e:
@@ -73,9 +73,9 @@ class SmugMugAlbumOperations:
         try:
             # Use date only for consistent naming
             date_stamp = datetime.now().strftime("%Y%m%d")
-            album_name = f"MugMatch Review {date_stamp}"
+            album_name = f"SmugDups Review {date_stamp}"
             # CRITICAL: UrlName must start with uppercase letter!
-            url_name = f"Mugmatch-review-{date_stamp}"
+            url_name = f"SmugDups-review-{date_stamp}"
             
             print(f"   Creating new album: {album_name}")
             print(f"   Using UrlName: {url_name}")
@@ -105,8 +105,8 @@ class SmugMugAlbumOperations:
                 'Name': album_name,                    # Display name
                 'UrlName': url_name,                   # REQUIRED: URL-friendly name (must start uppercase!)
                 'Privacy': 'Unlisted',                 # Safe privacy setting
-                'Description': f'MugMatch duplicate review album created {datetime.now().strftime("%Y-%m-%d %H:%M")}',
-                'Keywords': 'MugMatch,Duplicates,Review',
+                'Description': f'SmugDups duplicate review album created {datetime.now().strftime("%Y-%m-%d %H:%M")}',
+                'Keywords': 'SmugDups,Duplicates,Review',
                 'SortMethod': 'Date Uploaded',
                 'SortDirection': 'Descending'
             }
@@ -124,7 +124,7 @@ class SmugMugAlbumOperations:
             headers = {
                 'Accept': 'application/json',
                 'Content-Type': 'application/json',
-                'User-Agent': 'MugMatch/2.5-AlbumCreation'
+                'User-Agent': 'SmugDups/5.0-AlbumCreation'
             }
             
             response = requests.post(
@@ -196,9 +196,9 @@ MANUAL ALBUM CREATION REQUIRED:
 2. Create a new album named: {album_name}
 3. Important: Set the URL name to: {url_name}
 4. Set privacy to 'Unlisted' (recommended)
-5. Add description: 'MugMatch duplicate review album'
+5. Add description: 'SmugDups duplicate review album'
 6. Save the album
-7. Re-run MugMatch to detect the new album
+7. Re-run SmugDups to detect the new album
 
 The album will be automatically detected on the next scan.
 

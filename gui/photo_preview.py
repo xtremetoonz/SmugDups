@@ -1,6 +1,7 @@
 """
-Photo preview widget for displaying thumbnails and metadata v2.1
-File: photo_preview.py
+Photo preview widget for displaying thumbnails and metadata v5.0
+File: gui/photo_preview.py
+UPDATED: SmugDups v5.0 with correct cache directory naming
 """
 
 import os
@@ -12,7 +13,7 @@ from PIL import Image
 from core.models import DuplicatePhoto
 
 class PhotoPreviewWidget(QWidget):
-    """Widget to display photo preview and metadata"""
+    """Widget to display photo preview and metadata - SmugDups v5.0"""
     
     def __init__(self):
         super().__init__()
@@ -22,15 +23,15 @@ class PhotoPreviewWidget(QWidget):
         self._setup_ui()
         
     def _setup_cache_directory(self) -> str:
-        """Create and return path to thumbnail cache directory"""
-        cache_dir = os.path.join(os.getcwd(), 'mugmatch_cache', 'thumbnails')
+        """Create and return path to thumbnail cache directory - UPDATED for SmugDups"""
+        cache_dir = os.path.join(os.getcwd(), 'smugdups_cache', 'thumbnails')
         os.makedirs(cache_dir, exist_ok=True)
         
         # Create .gitignore in cache directory
         gitignore_path = os.path.join(os.path.dirname(cache_dir), '.gitignore')
         if not os.path.exists(gitignore_path):
             with open(gitignore_path, 'w') as f:
-                f.write("# MugMatch cache directory\n")
+                f.write("# SmugDups cache directory\n")
                 f.write("thumbnails/\n")
                 f.write("*.jpg\n")
                 f.write("*.png\n")
@@ -201,7 +202,7 @@ class PhotoPreviewWidget(QWidget):
     
     def _on_download_failed(self, error_message):
         """Handle failed thumbnail download"""
-        print(f"Thumbnail download failed: {error_message}")
+        print(f"SmugDups thumbnail download failed: {error_message}")
         if self.current_photo:
             self._create_enhanced_placeholder(self.current_photo)
         
@@ -252,6 +253,11 @@ class PhotoPreviewWidget(QWidget):
         album_width = fm.horizontalAdvance(album)
         x = (276 - album_width) // 2
         painter.drawText(x, 135, album)
+        
+        # SmugDups watermark
+        painter.setFont(QFont("Arial", 8))
+        painter.setPen(QColor(100, 100, 100))
+        painter.drawText(5, 190, "SmugDups v5.0")
         
         painter.end()
         

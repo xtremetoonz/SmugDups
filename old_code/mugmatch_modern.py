@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Modernized MugMatch - SmugMug Duplicate Photo Manager
-A modern GUI replacement for the original MugMatch using PyQt6
+Modernized SmugDups - SmugMug Duplicate Photo Manager
+A modern GUI replacement for the original SmugDups using PyQt6
 REVISED VERSION - With enhanced copy functionality integrated
 """
 
@@ -150,14 +150,14 @@ class PhotoPreviewWidget(QWidget):
         
     def setup_cache_directory(self):
         """Create and return path to thumbnail cache directory"""
-        cache_dir = os.path.join(os.getcwd(), 'mugmatch_cache', 'thumbnails')
+        cache_dir = os.path.join(os.getcwd(), 'smugdups_cache', 'thumbnails')
         os.makedirs(cache_dir, exist_ok=True)
         
         # Create .gitignore in cache directory
         gitignore_path = os.path.join(os.path.dirname(cache_dir), '.gitignore')
         if not os.path.exists(gitignore_path):
             with open(gitignore_path, 'w') as f:
-                f.write("# MugMatch cache directory\n")
+                f.write("# SmugDups cache directory\n")
                 f.write("thumbnails/\n")
                 f.write("*.jpg\n")
                 f.write("*.png\n")
@@ -1165,7 +1165,7 @@ class DuplicateGroupWidget(QWidget):
         
         self.selection_changed.emit()
 
-class MugMatchMainWindow(QMainWindow):
+class SmugDupsMainWindow(QMainWindow):
     """Main application window"""
     
     def __init__(self):
@@ -1178,7 +1178,7 @@ class MugMatchMainWindow(QMainWindow):
         QTimer.singleShot(100, self.initialize_app)
         
     def setup_ui(self):
-        self.setWindowTitle("MugMatch - SmugMug Duplicate Manager")
+        self.setWindowTitle("SmugDups - SmugMug Duplicate Manager")
         self.setGeometry(100, 100, 1200, 800)
         
         # Dark theme with better scrollbars
@@ -1340,7 +1340,7 @@ class MugMatchMainWindow(QMainWindow):
         # Help menu
         help_menu = menubar.addMenu('Help')
         
-        about_action = QAction('About MugMatch', self)
+        about_action = QAction('About SmugDups', self)
         about_action.triggered.connect(self.show_about)
         help_menu.addAction(about_action)
     
@@ -1501,7 +1501,7 @@ class MugMatchMainWindow(QMainWindow):
         layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
         
         # Welcome message
-        welcome_label = QLabel("🏠 Welcome to MugMatch 2.0")
+        welcome_label = QLabel("🏠 Welcome to SmugDups 2.0")
         welcome_label.setStyleSheet("font-size: 24px; font-weight: bold; margin: 20px;")
         welcome_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(welcome_label)
@@ -1950,9 +1950,9 @@ else:  # MM/YYYY format
        from PyQt6.QtWidgets import QMessageBox
        
        about_text = """
-<h2>MugMatch 2.0</h2>
+<h2>SmugDups 2.0</h2>
 <p><b>Modern SmugMug Duplicate Photo Manager</b></p>
-<p>A modernized version of the original MugMatch tool for finding and managing duplicate photos in your SmugMug account.</p>
+<p>A modernized version of the original SmugDups tool for finding and managing duplicate photos in your SmugMug account.</p>
 
 <h3>Features:</h3>
 <ul>
@@ -1975,7 +1975,7 @@ else:  # MM/YYYY format
 </ul>
 
 <h3>Credits:</h3>
-<p>Based on the original MugMatch by AndrewsOR<br>
+<p>Based on the original SmugDups by AndrewsOR<br>
 Modernized interface and SmugMug API v2 integration<br>
 Enhanced copy functionality integration</p>
 
@@ -1983,7 +1983,7 @@ Enhanced copy functionality integration</p>
        """
        
        msg = QMessageBox()
-       msg.setWindowTitle("About MugMatch")
+       msg.setWindowTitle("About SmugDups")
        msg.setTextFormat(Qt.TextFormat.RichText)
        msg.setText(about_text)
        msg.setStyleSheet("""
@@ -2011,7 +2011,7 @@ Enhanced copy functionality integration</p>
            
            reply = QMessageBox.question(
                self, 
-               'Exit MugMatch', 
+               'Exit SmugDups', 
                'A scan is currently in progress. Are you sure you want to exit?',
                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
                QMessageBox.StandardButton.No
@@ -2031,12 +2031,12 @@ def main():
    app = QApplication(sys.argv)
    
    # Set application properties
-   app.setApplicationName("MugMatch")
+   app.setApplicationName("SmugDups")
    app.setApplicationVersion("2.0")
-   app.setOrganizationName("MugMatch")
+   app.setOrganizationName("SmugDups")
    
    # Create and show main window
-   window = MugMatchMainWindow()
+   window = SmugDupsMainWindow()
    window.show()
    
    sys.exit(app.exec())

@@ -1,5 +1,5 @@
 """
-Background thread for finding duplicate photos v2.1
+Background thread for finding duplicate photos v5.0
 File: duplicate_finder.py
 """
 

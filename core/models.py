@@ -1,5 +1,5 @@
 """
-Core data models for MugMatch v2.1
+Core data models for SmugDups v5.0
 File: models.py
 """
 

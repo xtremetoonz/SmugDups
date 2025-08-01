@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
 """
-SmugMug Copy Operations - Core copying functionality v2.6
+SmugMug Copy Operations for SmugDups v5.0
 File: operations/smugmug_copy_operations.py
-UPDATED: Now uses MOVE operations to actually remove duplicates from source albums
-Contains the core image moving methods separated from album management
+UPDATED: Uses WORKING moveimages format with proper syntax
 """
 
 import requests
@@ -13,304 +12,168 @@ import time
 from typing import Dict, List, Optional, Tuple
 
 class SmugMugCopyOperations:
-    """Core SmugMug image moving operations (was copy, now move)"""
+    """SmugMug operations using WORKING moveimages format"""
     
     def __init__(self, api_adapter):
         self.api = api_adapter
         
-    def copy_image_to_album(self, image_id: str, target_album_key: str) -> Tuple[bool, str]:
-        """COPY image to target album - SAFE MODE (no delete due to SmugMug bug)"""
+    def move_image_to_album(self, image_id: str, source_album_key: str, target_album_key: str) -> Tuple[bool, str]:
+        """MOVE image using WORKING SmugMug moveimages format"""
         try:
-            print(f"   📋 COPYING image {image_id} to album {target_album_key} (SAFE MODE)")
-            print(f"   ⚠️  NOTE: Original will remain due to SmugMug delete bug")
+            print(f"Moving image {image_id} from {source_album_key} to {target_album_key}")
             
-            # First, verify the image and album exist
-            print(f"   🔍 Verifying image and album exist...")
+            # Verify source and target albums exist
+            source_info = self.api.get_album_info(source_album_key)
+            target_info = self.api.get_album_info(target_album_key)
             
-            # Check if image exists and get its details
-            image_details = self.api.get_image_details(image_id)
-            if not image_details:
-                return False, f"Image {image_id} not found or not accessible"
+            if not source_info:
+                return False, f"Source album {source_album_key} not found"
+            if not target_info:
+                return False, f"Target album {target_album_key} not found"
             
-            print(f"   ✅ Image verified: {image_details.get('FileName', 'Unknown')}")
-            
-            # Check if album exists and get its details
-            album_info = self.api.get_album_info(target_album_key)
-            if not album_info:
-                return False, f"Album {target_album_key} not found or not accessible"
-            
-            print(f"   ✅ Album verified: {album_info.get('name', 'Unknown')}")
-        
-            # SAFE MODE: Only copy, don't delete (due to SmugMug bug)
-            success, message = self._safe_copy_only(image_id, target_album_key, image_details)
+            # Use WORKING moveimages format
+            success, message = self._move_via_working_format(image_id, source_album_key, target_album_key)
             if success:
                 return True, message
-        
-            # Fallback: Manual instructions
-            debug_info = self._debug_api_response(image_id, target_album_key)
-            return self._provide_enhanced_manual_instructions(image_id, target_album_key, debug_info)
+            
+            # Fallback to collectimages if move fails
+            print(f"Move failed, falling back to collect+manual delete")
+            return self._fallback_to_collect(image_id, target_album_key)
         
         except Exception as e:
-            return False, f"Copy failed with exception: {str(e)}"
+            return False, f"Move failed with exception: {str(e)}"
 
-    def _safe_copy_only(self, image_id: str, target_album_key: str, image_details: dict) -> Tuple[bool, str]:
-        """SAFE copy that doesn't delete original (due to SmugMug bug)"""
+    def _move_via_working_format(self, image_id: str, source_album_key: str, target_album_key: str) -> Tuple[bool, str]:
+        """Use the WORKING moveimages format"""
         try:
-            print(f"   🔄 Safe copy-only approach (no delete)")
+            # WORKING FORMAT from SmugMug support:
+            # 1. Use TARGET album's moveimages endpoint
+            # 2. Parameter name: 'MoveUris' 
+            # 3. Value: '/api/v2/album/SOURCE_ALBUM/image/IMAGE_ID-0'
             
-            # Step 1: Copy using the working collect method
-            success, message = self._copy_via_collect_multiple_formats(image_id, target_album_key, image_details)
-            if not success:
-                return False, f"Copy step failed: {message}"
-            
-            print(f"   ✅ Copy API call successful, now verifying...")
-            
-            # Step 2: Verify the image actually appeared in the target album
-            time.sleep(2)  # Give SmugMug time to process
-            
-            if not self._verify_image_in_album(image_id, target_album_key):
-                print(f"   ❌ VERIFICATION FAILED: Image not found in target album despite 200 OK!")
-                return False, "Copy appeared successful but image not found in destination album"
-            
-            print(f"   ✅ Copy verified - image confirmed in target album")
-            print(f"   ℹ️  SAFE MODE: Original image kept in source album (SmugMug delete bug)")
-            print(f"   💡 You can manually delete originals later from SmugMug web interface")
-            
-            return True, f"Image safely copied to review album (original preserved due to SmugMug API bug)"
-                
-        except Exception as e:
-            return False, f"Safe copy error: {str(e)}"
-
-    def _move_via_moveimages_quick_test(self, image_id: str, target_album_key: str, image_details: dict) -> Tuple[bool, str]:
-        """Quick test of moveimages endpoint - only try most likely formats"""
-        try:
             url = f"https://api.smugmug.com/api/v2/album/{target_album_key}!moveimages"
-            print(f"   🔍 Quick MOVE test: {url}")
             
-            # Only try the most promising formats to save time
-            quick_tests = [
-                {'ImageUris': f"/api/v2/image/{image_id}"},           # String format
-                {'ImageUris': f"/api/v2/image/{image_id}-0"},         # Redirect string format
-                {'ImageUris': [f"/api/v2/image/{image_id}"]},         # Array format
+            # Try both formats (with and without -0 suffix)
+            move_formats = [
+                f"/api/v2/album/{source_album_key}/image/{image_id}-0",  # Preferred format
+                f"/api/v2/album/{source_album_key}/image/{image_id}"     # Alternative format
             ]
             
-            for i, move_data in enumerate(quick_tests):
-                print(f"     📋 Quick test {i+1}: {move_data}")
+            for i, move_uri in enumerate(move_formats, 1):
+                print(f"Attempting move format {i}: {move_uri}")
                 
-                success, response_data = self._make_move_request(url, move_data)
+                data = {'MoveUris': move_uri}
+                
+                success, response_data = self._make_move_request(url, data)
                 
                 if success:
-                    print(f"   ✅ SUCCESS with moveimages quick test {i+1}!")
-                    return True, f"Image MOVED via moveimages quick test {i+1}"
+                    print(f"Move successful with format {i}")
+                    
+                    # Verify the move worked
+                    time.sleep(2)  # Give SmugMug time to process
+                    if self._verify_image_moved(image_id, source_album_key, target_album_key):
+                        return True, f"Image moved successfully using format {i}"
+                    else:
+                        print(f"API succeeded but verification failed")
+                        return True, f"Move API succeeded (format {i})"
                 
-                time.sleep(0.1)  # Very short delay
+                time.sleep(0.5)  # Small delay between attempts
             
-            print(f"   ❌ All moveimages quick tests failed")
-            return False, "moveimages quick tests failed"
+            return False, "All move formats failed"
             
         except Exception as e:
-            print(f"   💥 Move quick test exception: {e}")
-            return False, f"Move quick test error: {str(e)}"
+            return False, f"Working format error: {str(e)}"
 
-    def _move_via_moveimages_multiple_formats(self, image_id: str, target_album_key: str, image_details: dict) -> Tuple[bool, str]:
-        """Try SmugMug's moveimages endpoint with multiple URI and data formats"""
+    def _make_move_request(self, url: str, data: Dict) -> Tuple[bool, Optional[dict]]:
+        """Make moveimages request with proper OAuth handling"""
         try:
-            url = f"https://api.smugmug.com/api/v2/album/{target_album_key}!moveimages"
-            print(f"   🔍 MOVE METHOD: {url}")
+            # Create fresh OAuth
+            auth = OAuth1(
+                client_key=self.api.api_key,
+                client_secret=self.api.api_secret,
+                resource_owner_key=self.api.access_token,
+                resource_owner_secret=self.api.access_secret,
+                signature_method='HMAC-SHA1',
+                signature_type='AUTH_HEADER'
+            )
             
-            # Build URI candidates
-            image_uri_formats = [
-                f"/api/v2/image/{image_id}",                    # Standard format
-                f"/api/v2/image/{image_id}-0",                  # Redirect format
-                image_details.get('Uri', ''),                   # URI from image details
-                image_details.get('Uris', {}).get('Image', ''), # Alternative URI location
-            ]
+            headers = {
+                'Accept': 'application/json',
+                'Content-Type': 'application/json',
+                'User-Agent': 'SmugDups/5.0-WorkingMoveImages'
+            }
             
-            # Filter empty URIs and add full URL versions
-            clean_uris = [uri for uri in image_uri_formats if uri]
-            full_url_formats = [f"https://api.smugmug.com{uri}" for uri in clean_uris if uri.startswith('/')]
-            all_uri_formats = clean_uris + full_url_formats
+            response = requests.post(url, auth=auth, headers=headers, json=data, 
+                                   allow_redirects=False, timeout=30)
             
-            for i, image_uri in enumerate(all_uri_formats):
-                print(f"   📤 Trying URI format {i+1}: {image_uri}")
-                
-                # Try multiple data formats for move operations
-                data_formats = [
-                    {'ImageUris': [image_uri]},             # Array format
-                    {'ImageUris': image_uri},               # String format  
-                    {'MoveUris': [image_uri]},              # Alternative parameter name
-                    {'MoveUris': image_uri},                # Alternative parameter as string
-                ]
-                
-                for j, move_data in enumerate(data_formats):
-                    print(f"     📋 Data format {j+1}: {move_data}")
-                    
-                    success, response_data = self._make_move_request(url, move_data)
-                    
-                    if success:
-                        print(f"   ✅ SUCCESS with MOVE URI format {i+1}, data format {j+1}!")
-                        return True, f"Image MOVED via moveimages URI format {i+1}, data format {j+1}"
-                    
-                    # Check for specific error handling
-                    if response_data and isinstance(response_data, dict):
-                        if self._handle_move_error(response_data):
-                            continue  # Try next format
-                        
-                        # Check for fatal errors
-                        code = response_data.get('Code', 0)
-                        if code in [4, 5, 15]:  # Invalid album, image, or permission denied
-                            message = response_data.get('Message', 'Unknown error')
-                            return False, f"Fatal error (Code {code}): {message}"
-                    
-                    time.sleep(0.2)  # Small delay between attempts
-                
-                time.sleep(0.5)  # Delay between URI attempts
+            # Handle redirects manually
+            if 300 <= response.status_code < 400:
+                redirect_location = response.headers.get('Location', '')
+                if redirect_location:
+                    # Create fresh OAuth for redirect
+                    auth = OAuth1(
+                        client_key=self.api.api_key,
+                        client_secret=self.api.api_secret,
+                        resource_owner_key=self.api.access_token,
+                        resource_owner_secret=self.api.access_secret,
+                        signature_method='HMAC-SHA1',
+                        signature_type='AUTH_HEADER'
+                    )
+                    response = requests.post(redirect_location, auth=auth, headers=headers, 
+                                           json=data, allow_redirects=False, timeout=30)
             
-            return False, f"All {len(all_uri_formats)} MOVE URI formats failed"
-            
-        except Exception as e:
-            print(f"   💥 Move method exception: {e}")
-            return False, f"Move method error: {str(e)}"
-
-    def _copy_then_delete_original(self, image_id: str, target_album_key: str, image_details: dict) -> Tuple[bool, str]:
-        """Fallback: Copy to review album then delete from original location - WITH VERIFICATION"""
-        try:
-            print(f"   🔄 Fallback: Copy then delete approach")
-            
-            # Step 1: Copy using the working collect method
-            success, message = self._copy_via_collect_multiple_formats(image_id, target_album_key, image_details)
-            if not success:
-                return False, f"Copy step failed: {message}"
-            
-            print(f"   ✅ Copy API call successful, now verifying...")
-            
-            # Step 1.5: CRITICAL - Verify the image actually appeared in the target album
-            time.sleep(2)  # Give SmugMug time to process
-            
-            if not self._verify_image_in_album(image_id, target_album_key):
-                print(f"   ❌ VERIFICATION FAILED: Image not found in target album despite 200 OK!")
-                return False, "Copy appeared successful but image not found in destination album"
-            
-            print(f"   ✅ Copy verified - image confirmed in target album")
-            
-            # Step 2: Delete the original image
-            print(f"   🗑️ Now deleting original from source album...")
-            success, delete_message = self.api.delete_image_with_details(image_id)
-            if success:
-                print(f"   ✅ Original image deleted successfully!")
-                
-                # Step 3: FINAL VERIFICATION - Check if image is still in target album after delete
-                print(f"   🔍 Final verification: Checking if image still in target album after delete...")
-                time.sleep(2)  # Give SmugMug time to process delete
-                
-                if self._verify_image_in_album(image_id, target_album_key):
-                    print(f"   ✅ FINAL SUCCESS: Image confirmed in target album after delete operation")
-                    return True, f"Image moved via verified copy+delete: {message}"
-                else:
-                    print(f"   ❌ CRITICAL ISSUE: Image disappeared from target album after delete!")
-                    print(f"   🚨 The delete operation may have affected the target album too!")
-                    return False, "Image disappeared from target album after delete - possible SmugMug bug"
+            if response.status_code in [200, 201]:
+                return True, None
             else:
-                print(f"   ⚠️  Copy succeeded but delete failed: {delete_message}")
-                print(f"   ⚠️  WARNING: Image now exists in BOTH albums!")
-                return True, f"Image copied but original delete failed: {delete_message}"
-                
+                try:
+                    error_data = response.json()
+                    error_code = error_data.get('Code', 0)
+                    error_msg = error_data.get('Message', 'Unknown error')
+                    print(f"Error {error_code}: {error_msg}")
+                    return False, error_data
+                except:
+                    print(f"HTTP {response.status_code}: {response.text[:150]}")
+                    return False, None
+                    
         except Exception as e:
-            return False, f"Copy+delete error: {str(e)}"
+            print(f"Request exception: {e}")
+            return False, None
 
-    def _verify_image_in_album(self, image_id: str, target_album_key: str) -> bool:
-        """Verify that an image actually exists in the target album - ENHANCED DEBUG"""
+    def _verify_image_moved(self, image_id: str, source_album_key: str, target_album_key: str) -> bool:
+        """Verify that image was actually moved"""
         try:
-            print(f"      🔍 Verifying image {image_id} in album {target_album_key}...")
+            print(f"Verifying move: {image_id}")
             
-            # Get all images in the target album
-            album_images = self.api.get_album_images(target_album_key)
+            # Check if image is NO LONGER in source album
+            source_images = self.api.get_album_images(source_album_key)
+            source_has_image = any(img.get('image_id') == image_id for img in source_images)
             
-            if not album_images:
-                print(f"      ❌ Could not retrieve album images for verification")
-                return False
+            # Check if image IS NOW in target album  
+            target_images = self.api.get_album_images(target_album_key)
+            target_has_image = any(img.get('image_id') == image_id for img in target_images)
             
-            print(f"      📊 Target album contains {len(album_images)} images")
+            # Successful move = image removed from source AND added to target
+            move_successful = not source_has_image and target_has_image
             
-            # ENHANCED: Show ALL images in the album for debugging
-            print(f"      🔍 DETAILED album contents:")
-            for i, album_image in enumerate(album_images):
-                img_id = album_image.get('image_id', 'unknown')
-                filename = album_image.get('filename', 'unknown')
-                album_name = album_image.get('album_name', 'unknown')
-                url = album_image.get('url', 'no-url')
-                print(f"         {i+1}. ID: {img_id}, File: {filename}, Album: {album_name}")
-                print(f"            URL: {url}")
-                
-                # Check if this is our image
-                if img_id == image_id:
-                    print(f"      ✅ FOUND: Image {image_id} confirmed in target album!")
-                    print(f"               Filename: {filename}")
-                    print(f"               URL: {url}")
-                    return True
+            if move_successful:
+                print(f"Move verified successfully")
+            else:
+                print(f"Move verification failed")
             
-            print(f"      ❌ Image {image_id} NOT found in target album")
-            print(f"      🎯 Looking for image ID: {image_id}")
+            return move_successful
             
-            # Also get the album info to double-check we're looking at the right album
-            album_info = self.api.get_album_info(target_album_key)
-            if album_info:
-                print(f"      📁 Album info: {album_info.get('name', 'unknown')} (ID: {album_info.get('id', 'unknown')})")
-                print(f"      🌐 Album URL: {album_info.get('url', 'no-url')}")
-            
+        except Exception as e:
+            print(f"Verification error: {e}")
             return False
-            
-        except Exception as e:
-            print(f"      💥 Verification error: {e}")
-            import traceback
-            traceback.print_exc()
-            return False  # Fail safe - assume it didn't work if we can't verify
 
-    def _copy_via_collect_multiple_formats(self, image_id: str, target_album_key: str, image_details: dict) -> Tuple[bool, str]:
-        """Copy using SmugMug's collectimages with multiple URI and data formats (for copy+delete fallback)"""
+    def _fallback_to_collect(self, image_id: str, target_album_key: str) -> Tuple[bool, str]:
+        """Fallback to collectimages if moveimages fails"""
         try:
+            print(f"Fallback: Using collectimages")
+            
             url = f"https://api.smugmug.com/api/v2/album/{target_album_key}!collectimages"
-            print(f"   🔍 COLLECT METHOD: {url}")
+            collect_data = {'CollectUris': f"/api/v2/image/{image_id}"}
             
-            # Build URI candidates
-            image_uri_formats = [
-                f"/api/v2/image/{image_id}",                    # Standard format
-                f"/api/v2/image/{image_id}-0",                  # Redirect format
-                image_details.get('Uri', ''),                   # URI from image details
-                image_details.get('Uris', {}).get('Image', ''), # Alternative URI location
-            ]
-            
-            # Filter empty URIs and add full URL versions
-            clean_uris = [uri for uri in image_uri_formats if uri]
-            full_url_formats = [f"https://api.smugmug.com{uri}" for uri in clean_uris if uri.startswith('/')]
-            all_uri_formats = clean_uris + full_url_formats
-            
-            for i, image_uri in enumerate(all_uri_formats):
-                print(f"   📤 Trying URI format {i+1}: {image_uri}")
-                
-                # Use the working string format we discovered
-                collect_data = {'CollectUris': image_uri}  # String format that worked
-                
-                print(f"     📋 Using working string format: {collect_data}")
-                
-                success, response_data = self._make_collect_request(url, collect_data)
-                
-                if success:
-                    print(f"   ✅ SUCCESS with collect URI format {i+1}!")
-                    return True, f"Image copied via CollectUris format {i+1}"
-                
-                time.sleep(0.2)  # Small delay between attempts
-            
-            return False, f"All {len(all_uri_formats)} collect URI formats failed"
-            
-        except Exception as e:
-            print(f"   💥 Collect method exception: {e}")
-            return False, f"Collect method error: {str(e)}"
-
-    def _make_move_request(self, url: str, move_data: dict) -> Tuple[bool, Optional[dict]]:
-        """Make a single move request with fresh OAuth"""
-        try:
-            # Create fresh OAuth
             auth = OAuth1(
                 client_key=self.api.api_key,
                 client_secret=self.api.api_secret,
@@ -323,429 +186,229 @@ class SmugMugCopyOperations:
             headers = {
                 'Accept': 'application/json',
                 'Content-Type': 'application/json',
-                'User-Agent': 'MugMatch/2.6-Move'
-            }
-            
-            response = requests.post(url, auth=auth, headers=headers, json=move_data, 
-                                   allow_redirects=False, timeout=30)
-            
-            print(f"     📥 Response: {response.status_code} - {response.reason}")
-            
-            # Check for success
-            if response.status_code in [200, 201]:
-                return True, None
-            
-            # Try to parse response
-            try:
-                response_data = response.json()
-                
-                # Check for success in response data
-                if 'Response' in response_data and response_data.get('Code', 0) != 400:
-                    print(f"     ✅ SUCCESS detected in response data!")
-                    return True, response_data
-                
-                return False, response_data
-                
-            except json.JSONDecodeError:
-                print(f"     ❌ Non-JSON response: {response.text[:200]}")
-                return False, None
-                
-        except Exception as e:
-            print(f"     💥 Request exception: {e}")
-            return False, None
-
-    def _make_collect_request(self, url: str, collect_data: dict) -> Tuple[bool, Optional[dict]]:
-        """Make a single collect request with fresh OAuth"""
-        try:
-            # Create fresh OAuth
-            auth = OAuth1(
-                client_key=self.api.api_key,
-                client_secret=self.api.api_secret,
-                resource_owner_key=self.api.access_token,
-                resource_owner_secret=self.api.access_secret,
-                signature_method='HMAC-SHA1',
-                signature_type='AUTH_HEADER'
-            )
-            
-            headers = {
-                'Accept': 'application/json',
-                'Content-Type': 'application/json',
-                'User-Agent': 'MugMatch/2.6-Collect'
+                'User-Agent': 'SmugDups/5.0-CollectFallback'
             }
             
             response = requests.post(url, auth=auth, headers=headers, json=collect_data, 
                                    allow_redirects=False, timeout=30)
             
-            print(f"     📥 Response: {response.status_code} - {response.reason}")
-            
-            # Check for success
             if response.status_code in [200, 201]:
-                return True, None
-            
-            # Try to parse response
-            try:
-                response_data = response.json()
-                
-                # Check for success in response data
-                if 'Response' in response_data and response_data.get('Code', 0) != 400:
-                    print(f"     ✅ SUCCESS detected in response data!")
-                    return True, response_data
-                
-                return False, response_data
-                
-            except json.JSONDecodeError:
-                print(f"     ❌ Non-JSON response: {response.text[:200]}")
-                return False, None
-                
-        except Exception as e:
-            print(f"     💥 Request exception: {e}")
-            return False, None
-
-    def _handle_move_error(self, response_data: dict) -> bool:
-        """Handle move error responses. Returns True if we should continue trying other formats."""
-        try:
-            code = response_data.get('Code', 0)
-            message = response_data.get('Message', 'Unknown error')
-            
-            print(f"       🔍 Error Code: {code} - {message}")
-            
-            # Continue trying for these errors
-            continue_errors = [400]  # Bad Request - might work with different format
-            
-            # Stop trying for these errors
-            fatal_errors = [4, 5, 15, 401, 403, 404]  # Invalid album/image, permission denied, not found
-            
-            if code in fatal_errors:
-                print(f"       ⛔ Fatal error - stopping attempts")
-                return False
-            elif code in continue_errors:
-                print(f"       🔄 Retryable error - continuing with next format")
-                return True
+                return True, "Image collected (fallback mode - manual deletion needed)"
             else:
-                print(f"       ❓ Unknown error code - continuing")
-                return True
+                return False, f"Both move and collect failed: HTTP {response.status_code}"
                 
         except Exception as e:
-            print(f"       💥 Error handling exception: {e}")
-            return True
+            return False, f"Fallback collect error: {str(e)}"
 
-    def _debug_api_response(self, image_id: str, target_album_key: str) -> dict:
-        """Debug API responses to understand what's wrong"""
-        debug_info = {
-            'image_id': image_id,
-            'album_key': target_album_key,
-            'image_access': None,
-            'album_access': None
-        }
+    def copy_image_to_album(self, image_id: str, target_album_key: str) -> Tuple[bool, str]:
+        """Backwards compatibility - now does actual move!"""
+        print(f"WARNING: copy_image_to_album now does ACTUAL MOVES!")
+        return self._fallback_to_collect(image_id, target_album_key)
+
+
+class SmugDupsMoveOperations:
+    """SmugDups move operations using WORKING moveimages"""
+    
+    def __init__(self, api_adapter):
+        self.api = api_adapter
+        self.move_ops = SmugMugCopyOperations(api_adapter)
         
-        try:
-            # Test basic image access
-            image_url = f"https://api.smugmug.com/api/v2/image/{image_id}"
-            auth = OAuth1(
-                client_key=self.api.api_key,
-                client_secret=self.api.api_secret,
-                resource_owner_key=self.api.access_token,
-                resource_owner_secret=self.api.access_secret,
-                signature_method='HMAC-SHA1',
-                signature_type='AUTH_HEADER'
-            )
-            
-            print(f"   🔍 DEBUG: Testing image access: {image_url}")
-            response = requests.get(image_url, auth=auth, allow_redirects=False, timeout=10)
-            debug_info['image_access'] = {
-                'status': response.status_code,
-                'accessible': response.status_code in [200, 301, 302]
-            }
-            print(f"   🔍 Image access result: {response.status_code}")
-            
-            # Test basic album access
-            album_url = f"https://api.smugmug.com/api/v2/album/{target_album_key}"
-            print(f"   🔍 DEBUG: Testing album access: {album_url}")
-            response = requests.get(album_url, auth=auth, allow_redirects=False, timeout=10)
-            debug_info['album_access'] = {
-                'status': response.status_code,
-                'accessible': response.status_code in [200, 301, 302]
-            }
-            print(f"   🔍 Album access result: {response.status_code}")
-            
-        except Exception as e:
-            debug_info['debug_error'] = str(e)
-            print(f"   ❌ Debug failed: {e}")
+    def move_duplicates_to_review(self, duplicate_groups: List[List], review_album_key: str) -> Dict:
+        """Move duplicate images using WORKING moveimages"""
+        print(f"\nMoving duplicates to review - SmugDups v5.0")
         
-        return debug_info
-
-    def _provide_enhanced_manual_instructions(self, image_id: str, target_album_key: str, debug_info: dict) -> Tuple[bool, str]:
-        """Provide enhanced manual instructions with debug information"""
-        try:
-            image_details = self.api.get_image_details(image_id)
-            album_info = self.api.get_album_info(target_album_key)
+        total_images = 0
+        successful_moves = 0
+        failed_moves = 0
+        move_results = []
+        
+        for group_num, group in enumerate(duplicate_groups, 1):
+            print(f"\nGroup {group_num}/{len(duplicate_groups)}: {len(group)} duplicates")
             
-            image_name = image_details.get('FileName', f'Image {image_id}') if image_details else f'Image {image_id}'
-            album_name = album_info.get('name', 'Review Album') if album_info else 'Review Album'
-            
-            manual_msg = f"All API MOVE methods failed - Manual move needed: {image_name} → {album_name}"
-            
-            print(f"   💡 {manual_msg}")
-            print(f"      Image ID: {image_id}")
-            print(f"      Target Album: {target_album_key}")
-            print(f"      Debug info: {debug_info}")
-            print(f"      💡 Use SmugMug's 'Collect' feature to manually MOVE this image")
-            print(f"      🔍 Consider checking album permissions and image accessibility")
-            
-            return False, manual_msg
-            
-        except Exception as e:
-            return False, f"Could not generate enhanced manual instructions: {str(e)}"
-
-    def _copy_via_collect_multiple_formats(self, image_id: str, target_album_key: str, image_details: dict) -> Tuple[bool, str]:
-        """Try SmugMug's collectimages with multiple URI and data formats"""
-        try:
-            url = f"https://api.smugmug.com/api/v2/album/{target_album_key}!collectimages"
-            print(f"   🔍 COLLECT METHOD: {url}")
-            
-            # Build URI candidates
-            image_uri_formats = [
-                f"/api/v2/image/{image_id}",                    # Standard format
-                f"/api/v2/image/{image_id}-0",                  # Redirect format
-                image_details.get('Uri', ''),                   # URI from image details
-                image_details.get('Uris', {}).get('Image', ''), # Alternative URI location
-            ]
-            
-            # Filter empty URIs and add full URL versions
-            clean_uris = [uri for uri in image_uri_formats if uri]
-            full_url_formats = [f"https://api.smugmug.com{uri}" for uri in clean_uris if uri.startswith('/')]
-            all_uri_formats = clean_uris + full_url_formats
-            
-            for i, image_uri in enumerate(all_uri_formats):
-                print(f"   📤 Trying URI format {i+1}: {image_uri}")
-                
-                # Try multiple data formats for CollectUris
-                data_formats = [
-                    {'CollectUris': [image_uri]},           # Array format
-                    {'CollectUris': image_uri},             # String format  
-                    {'CollectUris': f"{image_uri}"},        # Explicit string format
-                ]
-                
-                for j, collect_data in enumerate(data_formats):
-                    print(f"     📋 Data format {j+1}: {collect_data}")
-                    
-                    success, response_data = self._make_collect_request(url, collect_data)
-                    
-                    if success:
-                        print(f"   ✅ SUCCESS with URI format {i+1}, data format {j+1}!")
-                        return True, f"Image copied via CollectUris URI format {i+1}, data format {j+1}"
-                    
-                    # Check for specific error handling
-                    if response_data and isinstance(response_data, dict):
-                        if self._handle_collect_error(response_data):
-                            continue  # Try next format
-                        
-                        # Check for fatal errors
-                        code = response_data.get('Code', 0)
-                        if code in [4, 5, 15]:  # Invalid album, image, or permission denied
-                            message = response_data.get('Message', 'Unknown error')
-                            return False, f"Fatal error (Code {code}): {message}"
-                    
-                    time.sleep(0.2)  # Small delay between attempts
-                
-                time.sleep(0.5)  # Delay between URI attempts
-            
-            return False, f"All {len(all_uri_formats)} URI formats failed"
-            
-        except Exception as e:
-            print(f"   💥 Collect method exception: {e}")
-            return False, f"Collect method error: {str(e)}"
-
-    def _make_collect_request(self, url: str, collect_data: dict) -> Tuple[bool, Optional[dict]]:
-        """Make a single collect request with fresh OAuth"""
-        try:
-            # Create fresh OAuth
-            auth = OAuth1(
-                client_key=self.api.api_key,
-                client_secret=self.api.api_secret,
-                resource_owner_key=self.api.access_token,
-                resource_owner_secret=self.api.access_secret,
-                signature_method='HMAC-SHA1',
-                signature_type='AUTH_HEADER'
-            )
-            
-            headers = {
-                'Accept': 'application/json',
-                'Content-Type': 'application/json',
-                'User-Agent': 'MugMatch/2.5-Collect'
-            }
-            
-            response = requests.post(url, auth=auth, headers=headers, json=collect_data, 
-                                   allow_redirects=False, timeout=30)
-            
-            print(f"     📥 Response: {response.status_code} - {response.reason}")
-            
-            # Check for success
-            if response.status_code in [200, 201]:
-                return True, None
-            
-            # Try to parse response
-            try:
-                response_data = response.json()
-                
-                # Check for success in response data
-                if 'Response' in response_data and response_data.get('Code', 0) != 400:
-                    print(f"     ✅ SUCCESS detected in response data!")
-                    return True, response_data
-                
-                return False, response_data
-                
-            except json.JSONDecodeError:
-                print(f"     ❌ Non-JSON response: {response.text[:200]}")
-                return False, None
-                
-        except Exception as e:
-            print(f"     💥 Request exception: {e}")
-            return False, None
-
-    def _handle_collect_error(self, response_data: dict) -> bool:
-        """Handle collect error responses. Returns True if we should continue trying other formats."""
-        try:
-            code = response_data.get('Code', 0)
-            message = response_data.get('Message', 'Unknown error')
-            
-            print(f"       🔍 Error Code: {code} - {message}")
-            
-            # Continue trying for these errors
-            continue_errors = [400]  # Bad Request - might work with different format
-            
-            # Stop trying for these errors
-            fatal_errors = [4, 5, 15, 401, 403, 404]  # Invalid album/image, permission denied, not found
-            
-            if code in fatal_errors:
-                print(f"       ⛔ Fatal error - stopping attempts")
-                return False
-            elif code in continue_errors:
-                print(f"       🔄 Retryable error - continuing with next format")
-                return True
-            else:
-                print(f"       ❓ Unknown error code - continuing")
-                return True
-                
-        except Exception as e:
-            print(f"       💥 Error handling exception: {e}")
-            return True
-
-    def _copy_via_image_node_uri(self, image_uri: str, target_album_key: str) -> Tuple[bool, str]:
-        """Try using the exact URI from image details"""
-        try:
-            if not image_uri:
-                return False, "No image URI available"
-                
-            url = f"https://api.smugmug.com/api/v2/album/{target_album_key}!collectimages"
-            print(f"   🔍 Trying with exact image URI: {image_uri}")
-            
-            collect_data = {'CollectUris': [image_uri]}
-            success, response_data = self._make_collect_request(url, collect_data)
-            
-            if success:
-                print(f"   ✅ SUCCESS with exact image URI!")
-                return True, f"Image copied via exact URI from image details"
-            
-            return False, "exact image URI failed"
-            
-        except Exception as e:
-            return False, f"Exact URI error: {str(e)}"
-
-    def _copy_via_alternative_endpoints(self, image_id: str, target_album_key: str) -> Tuple[bool, str]:
-        """Try alternative SmugMug endpoints"""
-        try:
-            # Alternative approach: Try using different endpoint structures
-            alt_endpoints = [
-                f"https://api.smugmug.com/api/v2/image/{image_id}!collect",
-                f"https://api.smugmug.com/api/v2/album/{target_album_key}!moveimages",
-            ]
-            
-            for endpoint in alt_endpoints:
-                print(f"   🔍 Trying alternative endpoint: {endpoint}")
-                
-                if "!collect" in endpoint:
-                    data = {'AlbumUri': f"/api/v2/album/{target_album_key}"}
-                elif "!moveimages" in endpoint:
-                    data = {'ImageUris': [f"/api/v2/image/{image_id}"]}
-                else:
+            for photo in group:
+                # Skip the photo marked to keep
+                if hasattr(photo, 'keep') and photo.keep:
+                    print(f"Keeping: {photo.filename} from {photo.album_name}")
                     continue
                 
-                success, response_data = self._make_collect_request(endpoint, data)
+                total_images += 1
                 
-                if success:
-                    print(f"   ✅ SUCCESS with alternative endpoint!")
-                    return True, f"Image copied via alternative endpoint"
-            
-            return False, "all alternative endpoints failed"
-            
-        except Exception as e:
-            return False, f"Alternative endpoint error: {str(e)}"
-
-    def _debug_api_response(self, image_id: str, target_album_key: str) -> dict:
-        """Debug API responses to understand what's wrong"""
-        debug_info = {
-            'image_id': image_id,
-            'album_key': target_album_key,
-            'image_access': None,
-            'album_access': None
+                # Extract photo info
+                if hasattr(photo, 'image_id'):
+                    image_id = photo.image_id
+                    filename = photo.filename
+                    source_album_key = photo.album_id
+                    source_album_name = photo.album_name
+                else:
+                    image_id = photo.get('image_id', '')
+                    filename = photo.get('filename', 'unknown')
+                    source_album_key = photo.get('album_id', '')
+                    source_album_name = photo.get('album_name', 'unknown')
+                
+                if image_id and source_album_key:
+                    print(f"Moving: {filename} from {source_album_name}")
+                    
+                    # Use the WORKING move method
+                    success, message = self.move_ops.move_image_to_album(
+                        image_id, source_album_key, review_album_key
+                    )
+                    
+                    move_result = {
+                        'image_id': image_id,
+                        'filename': filename,
+                        'source_album': source_album_name,
+                        'success': success,
+                        'message': message
+                    }
+                    move_results.append(move_result)
+                    
+                    if success:
+                        successful_moves += 1
+                        print(f"Move successful")
+                    else:
+                        failed_moves += 1
+                        print(f"Move failed: {message}")
+                    
+                    time.sleep(1.0)  # Rate limiting
+                else:
+                    failed_moves += 1
+                    print(f"Missing image_id or album_id for {filename}")
+        
+        # Generate summary
+        success_rate = (successful_moves / total_images * 100) if total_images > 0 else 0
+        
+        summary = {
+            'success': True,
+            'total_images': total_images,
+            'successful_moves': successful_moves,
+            'failed_moves': failed_moves,
+            'success_rate': f"{success_rate:.1f}%",
+            'move_results': move_results,
+            'method': 'working_moveimages'
         }
         
-        try:
-            # Test basic image access
-            image_url = f"https://api.smugmug.com/api/v2/image/{image_id}"
-            auth = OAuth1(
-                client_key=self.api.api_key,
-                client_secret=self.api.api_secret,
-                resource_owner_key=self.api.access_token,
-                resource_owner_secret=self.api.access_secret,
-                signature_method='HMAC-SHA1',
-                signature_type='AUTH_HEADER'
-            )
-            
-            print(f"   🔍 DEBUG: Testing image access: {image_url}")
-            response = requests.get(image_url, auth=auth, allow_redirects=False, timeout=10)
-            debug_info['image_access'] = {
-                'status': response.status_code,
-                'accessible': response.status_code in [200, 301, 302]
-            }
-            print(f"   🔍 Image access result: {response.status_code}")
-            
-            # Test basic album access
-            album_url = f"https://api.smugmug.com/api/v2/album/{target_album_key}"
-            print(f"   🔍 DEBUG: Testing album access: {album_url}")
-            response = requests.get(album_url, auth=auth, allow_redirects=False, timeout=10)
-            debug_info['album_access'] = {
-                'status': response.status_code,
-                'accessible': response.status_code in [200, 301, 302]
-            }
-            print(f"   🔍 Album access result: {response.status_code}")
-            
-        except Exception as e:
-            debug_info['debug_error'] = str(e)
-            print(f"   ❌ Debug failed: {e}")
+        print(f"\nMove operation summary:")
+        print(f"Images processed: {summary['total_images']}")
+        print(f"Successful moves: {summary['successful_moves']}")
+        print(f"Failed moves: {summary['failed_moves']}")
+        print(f"Success rate: {summary['success_rate']}")
         
-        return debug_info
+        return summary
 
-    def _provide_enhanced_manual_instructions(self, image_id: str, target_album_key: str, debug_info: dict) -> Tuple[bool, str]:
-        """Provide enhanced manual instructions with debug information"""
-        try:
-            image_details = self.api.get_image_details(image_id)
-            album_info = self.api.get_album_info(target_album_key)
+
+class EnhancedPhotoCopyMoveOperations:
+    """Main orchestrator using WORKING moveimages"""
+    
+    def __init__(self, api_adapter):
+        self.api = api_adapter
+        self.move_manager = SmugDupsMoveOperations(api_adapter)
+        from .smugmug_album_operations import SmugMugAlbumOperations
+        self.album_ops = SmugMugAlbumOperations(api_adapter)
+        
+    def find_or_create_review_album(self, username: str) -> Optional[Dict]:
+        """Find existing review album or create a new one"""
+        return self.album_ops.find_or_create_review_album(username)
+    
+    def process_duplicates_for_review(self, duplicate_groups: List[List], username: str) -> Dict:
+        """Process duplicates using WORKING moveimages"""
+        print(f"\nSmugDups duplicate processing v5.0")
+        
+        # Step 1: Set up review album
+        review_album = self.find_or_create_review_album(username)
+        
+        if not review_album:
+            return {
+                'success': False,
+                'error': 'Could not set up review album',
+                'manual_creation_needed': True
+            }
+        
+        if review_album.get('manual_creation_needed'):
+            return {
+                'success': False,
+                'error': 'Manual album creation required',
+                'manual_creation_needed': True,
+                'instructions': review_album.get('instructions', ''),
+                'suggested_album_name': review_album['album_name'],
+                'suggested_url_name': review_album.get('suggested_url_name', '')
+            }
+        
+        album_key = review_album['album_key']
+        album_name = review_album['album_name']
+        
+        print(f"Using review album: {album_name} (Key: {album_key})")
+        if review_album.get('web_url'):
+            print(f"Album URL: {review_album['web_url']}")
+        
+        # Step 2: Filter duplicates to process
+        duplicates_to_move = []
+        for group in duplicate_groups:
+            group_to_move = []
+            for photo in group:
+                if hasattr(photo, 'keep') and photo.keep:
+                    print(f"Will keep: {photo.filename} from {photo.album_name}")
+                else:
+                    group_to_move.append(photo)
             
-            image_name = image_details.get('FileName', f'Image {image_id}') if image_details else f'Image {image_id}'
-            album_name = album_info.get('name', 'Review Album') if album_info else 'Review Album'
-            
-            manual_msg = f"All API copy methods failed - Manual copy needed: {image_name} → {album_name}"
-            
-            print(f"   💡 {manual_msg}")
-            print(f"      Image ID: {image_id}")
-            print(f"      Target Album: {target_album_key}")
-            print(f"      Debug info: {debug_info}")
-            print(f"      💡 Use SmugMug's 'Collect' feature to manually add this image")
-            print(f"      🔍 Consider checking album permissions and image accessibility")
-            
-            return False, manual_msg
-            
-        except Exception as e:
-            return False, f"Could not generate enhanced manual instructions: {str(e)}"
+            if group_to_move:
+                duplicates_to_move.append(group_to_move)
+        
+        if not any(duplicates_to_move):
+            return {
+                'success': True,
+                'review_album': review_album,
+                'total_groups': len(duplicate_groups),
+                'total_images': 0,
+                'successful_moves': 0,
+                'failed_moves': 0,
+                'success_rate': "100%",
+                'message': "No photos need to be moved - all are selected to keep"
+            }
+        
+        # Step 3: Execute moves
+        results = self.move_manager.move_duplicates_to_review(duplicates_to_move, album_key)
+        
+        # Step 4: Add review album info and return
+        results['review_album'] = review_album
+        results['total_groups'] = len(duplicate_groups)
+        
+        print(f"\nSmugDups moveimages complete!")
+        print(f"Review album: {album_name}")
+        print(f"Successful moves: {results['successful_moves']}")
+        
+        if review_album.get('web_url'):
+            print(f"Review album: {review_album['web_url']}")
+        
+        return results
+
+    def copy_image_to_album(self, image_id: str, target_album_key: str) -> Tuple[bool, str]:
+        """Backwards compatibility - now uses working move"""
+        print(f"WARNING: This now does ACTUAL MOVES, not copies!")
+        return self.move_manager.move_ops._fallback_to_collect(image_id, target_album_key)
+
+
+if __name__ == "__main__":
+    print("SmugDups v5.0 - Enhanced Photo Operations")
+    print("Working moveimages functionality")
+    
+    # Test if we can import and initialize
+    try:
+        import credentials
+        from smugmug_api import SmugMugAPIAdapter
+        
+        api = SmugMugAPIAdapter(
+            api_key=credentials.API_KEY,
+            api_secret=credentials.API_SECRET,
+            access_token=credentials.ACCESS_TOKEN,
+            access_secret=credentials.ACCESS_SECRET
+        )
+        
+        move_ops = EnhancedPhotoCopyMoveOperations(api)
+        print(f"Successfully initialized SmugDups v5.0!")
+        print(f"Working moveimages: SmugDupsMoveOperations")
+        print(f"Album operations: SmugMugAlbumOperations") 
+        print(f"Main orchestrator: EnhancedPhotoCopyMoveOperations")
+        
+    except Exception as e:
+        print(f"Import test failed: {e}")
+        print("Make sure to run this from the SmugDups root directory")

@@ -1,6 +1,7 @@
 """
-Main application window for MugMatch v2.1
-File: main_window.py
+Main application window for SmugDups v5.0
+File: gui/main_window.py
+UPDATED: Rebranded from SmugDups to SmugDups with working moveimages
 """
 
 from typing import List
@@ -36,8 +37,8 @@ class AlbumLoader(QThread):
             print(f"Error loading albums: {e}")
             self.error_occurred.emit(str(e))
 
-class MugMatchMainWindow(QMainWindow):
-    """Main application window"""
+class SmugDupsMainWindow(QMainWindow):
+    """Main application window for SmugDups"""
     
     def __init__(self):
         super().__init__()
@@ -49,7 +50,7 @@ class MugMatchMainWindow(QMainWindow):
         
     def _setup_ui(self):
         """Set up the user interface"""
-        self.setWindowTitle("MugMatch - SmugMug Duplicate Manager")
+        self.setWindowTitle("SmugDups - SmugMug Duplicate Photo Manager v5.0")
         self.setGeometry(100, 100, 1200, 800)
         
         # Apply dark theme
@@ -80,7 +81,7 @@ class MugMatchMainWindow(QMainWindow):
         # Status bar
         self.status_bar = QStatusBar()
         self.setStatusBar(self.status_bar)
-        self.status_bar.showMessage("Ready")
+        self.status_bar.showMessage("SmugDups v5.0 Ready - Now with working moveimages!")
     
     def _apply_dark_theme(self):
         """Apply dark theme styling"""
@@ -182,7 +183,7 @@ class MugMatchMainWindow(QMainWindow):
         # Help menu
         help_menu = menubar.addMenu('Help')
         
-        about_action = QAction('About MugMatch', self)
+        about_action = QAction('About SmugDups', self)
         about_action.triggered.connect(self._show_about)
         help_menu.addAction(about_action)
     
@@ -298,7 +299,7 @@ class MugMatchMainWindow(QMainWindow):
         layout = QVBoxLayout(widget)
         layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
         
-        welcome_label = QLabel("🏠 Welcome to MugMatch 2.0")
+        welcome_label = QLabel("🏠 Welcome to SmugDups v5.0")
         welcome_label.setStyleSheet("font-size: 24px; font-weight: bold; margin: 20px;")
         welcome_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(welcome_label)
@@ -311,12 +312,14 @@ class MugMatchMainWindow(QMainWindow):
 3. Click "🔍 Scan for Duplicates" to find duplicate photos
 4. Review and manage duplicates when found
 
-💡 New Feature: You can now copy duplicates to a review album
-   instead of deleting them immediately!
+🎉 NEW in v5.0: WORKING moveimages functionality!
+   ✅ True moves - duplicates are removed from source albums
+   ✅ No manual cleanup needed - fully automated!
+   ✅ SmugMug API v2 compliant with proper parameters
 
 🔍 Tip: Start with smaller albums first to test the process!
         """)
-        instructions.setStyleSheet("font-size: 14px; line-height: 1.5; color: #cccccc; max-width: 400px;")
+        instructions.setStyleSheet("font-size: 14px; line-height: 1.5; color: #cccccc; max-width: 500px;")
         instructions.setAlignment(Qt.AlignmentFlag.AlignCenter)
         instructions.setWordWrap(True)
         layout.addWidget(instructions)
@@ -347,28 +350,28 @@ class MugMatchMainWindow(QMainWindow):
             print("Testing SmugMug API connection...")
             user_info = self.api.get_user_info(credentials.USER_NAME)
             if user_info:
-                self.status_bar.showMessage(f"Connected as {user_info.get('Name', credentials.USER_NAME)}")
+                self.status_bar.showMessage(f"SmugDups v5.0 - Connected as {user_info.get('Name', credentials.USER_NAME)}")
                 print(f"Successfully connected to SmugMug as: {user_info.get('Name', credentials.USER_NAME)}")
             else:
-                self.status_bar.showMessage("API connection test failed")
+                self.status_bar.showMessage("SmugDups v5.0 - API connection test failed")
                 print("API connection test failed")
                 
         except ImportError as e:
-            self.status_bar.showMessage("credentials.py file not found")
+            self.status_bar.showMessage("SmugDups v5.0 - credentials.py file not found")
             print(f"Could not import credentials.py: {e}")
             self.api = None
         except Exception as e:
-            self.status_bar.showMessage(f"Failed to load credentials: {e}")
+            self.status_bar.showMessage(f"SmugDups v5.0 - Failed to load credentials: {e}")
             print(f"Credential loading error: {e}")
             self.api = None
 
     def _load_albums(self):
         """Load albums from SmugMug"""
         if not self.api:
-            self.status_bar.showMessage("No API connection - please check credentials")
+            self.status_bar.showMessage("SmugDups v5.0 - No API connection - please check credentials")
             return
         
-        self.status_bar.showMessage("Loading albums...")
+        self.status_bar.showMessage("SmugDups v5.0 - Loading albums...")
         self.refresh_button.setEnabled(False)
         self.stats_label.setText("Loading albums...")
         
@@ -398,7 +401,7 @@ class MugMatchMainWindow(QMainWindow):
         self._populate_albums_list()
         self.refresh_button.setEnabled(True)
         self.scan_button.setEnabled(True)
-        self.status_bar.showMessage(f"Loaded {len(albums)} albums")
+        self.status_bar.showMessage(f"SmugDups v5.0 - Loaded {len(albums)} albums")
         self.stats_label.setText(f"{len(albums)} albums loaded")
         
         print(f"Successfully loaded {len(albums)} albums")
@@ -406,7 +409,7 @@ class MugMatchMainWindow(QMainWindow):
     def _on_albums_error(self, error_message):
         """Handle album loading errors"""
         self.refresh_button.setEnabled(True)
-        self.status_bar.showMessage(f"Failed to load albums: {error_message}")
+        self.status_bar.showMessage(f"SmugDups v5.0 - Failed to load albums: {error_message}")
         self.stats_label.setText("Album loading failed")
         print(f"Album loading error: {error_message}")
     
@@ -530,7 +533,7 @@ class MugMatchMainWindow(QMainWindow):
         selected_albums = self._get_selected_albums()
         
         if not selected_albums:
-            self.status_bar.showMessage("Please select at least one album to scan")
+            self.status_bar.showMessage("SmugDups v5.0 - Please select at least one album to scan")
             return
         
         print(f"Starting duplicate scan of {len(selected_albums)} selected albums")
@@ -549,7 +552,7 @@ class MugMatchMainWindow(QMainWindow):
     def _update_progress(self, value: int, message: str):
         """Update progress bar and status"""
         self.progress_bar.setValue(value)
-        self.status_bar.showMessage(message)
+        self.status_bar.showMessage(f"SmugDups v5.0 - {message}")
     
     def _display_duplicates(self, duplicate_groups: List[List[DuplicatePhoto]]):
         """Display found duplicate groups"""
@@ -608,8 +611,8 @@ class MugMatchMainWindow(QMainWindow):
         container_layout.addWidget(instruction)
         
         # Add feature highlight
-        feature_highlight = QLabel("✨ NEW: You can now copy duplicates to a review album for manual deletion later!")
-        feature_highlight.setStyleSheet("font-size: 13px; color: #2196F3; margin: 5px 10px; padding: 6px; background-color: #1a237e; border-radius: 3px; border: 1px solid #2196F3;")
+        feature_highlight = QLabel("🎉 SmugDups v5.0: Now with WORKING moveimages - True moves with no manual cleanup needed!")
+        feature_highlight.setStyleSheet("font-size: 13px; color: #4CAF50; margin: 5px 10px; padding: 6px; background-color: #1b5e20; border-radius: 3px; border: 1px solid #4CAF50;")
         container_layout.addWidget(feature_highlight)
         
         # Add each duplicate group
@@ -638,35 +641,46 @@ class MugMatchMainWindow(QMainWindow):
         self.progress_bar.setVisible(False)
         self.scan_button.setEnabled(True)
         self.refresh_button.setEnabled(True)
-        self.status_bar.showMessage("Scan completed")
+        self.status_bar.showMessage("SmugDups v5.0 - Scan completed")
     
     def _handle_error(self, error_message: str):
         """Handle errors during scanning"""
         self.progress_bar.setVisible(False)
         self.scan_button.setEnabled(True)
-        self.status_bar.showMessage(f"Error: {error_message}")
+        self.status_bar.showMessage(f"SmugDups v5.0 - Error: {error_message}")
         print(f"Scan error: {error_message}")
 
     def _show_about(self):
         """Show about dialog"""
         about_text = """
-<h2>MugMatch 2.0</h2>
-<p><b>Modern SmugMug Duplicate Photo Manager</b></p>
-<p>A modernized version of the original MugMatch tool for finding and managing duplicate photos in your SmugMug account.</p>
+<h2>SmugDups v5.0</h2>
+<p><b>SmugMug Duplicate Photo Manager</b></p>
+<p>Advanced duplicate photo detection and management for SmugMug accounts with working moveimages functionality.</p>
 
-<h3>New in Version 2.0:</h3>
+<h3>New in Version 5.0:</h3>
 <ul>
-<li>🆕 Copy to Review Album feature</li>
-<li>🆕 Non-destructive duplicate management</li>
-<li>🆕 Modular, maintainable code structure</li>
-<li>🆕 Enhanced error handling</li>
+<li>🎉 WORKING moveimages functionality</li>
+<li>✅ True moves - duplicates removed from source albums</li>
+<li>✅ No manual cleanup needed - fully automated</li>
+<li>✅ SmugMug API v2 compliant with proper parameters</li>
+<li>🔄 Enhanced error handling and verification</li>
+<li>🚀 Rebranded from SmugDups to SmugDups</li>
 </ul>
 
-<p><i>Version 2.0 - 2025</i></p>
+<h3>Features:</h3>
+<ul>
+<li>MD5-based duplicate detection across albums</li>
+<li>PyQt6 modern GUI interface</li>
+<li>Automatic review album creation</li>
+<li>OAuth1 authentication with redirect handling</li>
+<li>Comprehensive duplicate management workflow</li>
+</ul>
+
+<p><i>Version 5.0 - 2025</i></p>
         """
         
         msg = QMessageBox()
-        msg.setWindowTitle("About MugMatch")
+        msg.setWindowTitle("About SmugDups")
         msg.setTextFormat(Qt.TextFormat.RichText)
         msg.setText(about_text)
         msg.setStyleSheet("""
@@ -692,7 +706,7 @@ class MugMatchMainWindow(QMainWindow):
         if hasattr(self, 'finder_thread') and self.finder_thread.isRunning():
             reply = QMessageBox.question(
                 self, 
-                'Exit MugMatch', 
+                'Exit SmugDups', 
                 'A scan is currently in progress. Are you sure you want to exit?',
                 QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
                 QMessageBox.StandardButton.No

@@ -1,5 +1,5 @@
 """
-SmugMug Album/Folder Operations for MugMatch - FINAL FIXED VERSION
+SmugMug Album/Folder Operations for SmugDups - FINAL FIXED VERSION
 Uses correct SmugMug API endpoints for album creation
 """
 
@@ -40,7 +40,7 @@ class SmugMugFolderOperations:
             auth = self._create_oauth()
             headers = {
                 'Accept': 'application/json',
-                'User-Agent': 'MugMatch/2.0-FolderOps-Final'
+                'User-Agent': 'SmugDups/2.0-FolderOps-Final'
             }
             
             if data and method in ['POST', 'PUT', 'PATCH']:
@@ -150,10 +150,10 @@ class SmugMugFolderOperations:
             album_data = {
                 'Name': album_name,
                 'Privacy': 'Unlisted',
-                'Description': f'MugMatch duplicate review album created {datetime.now().isoformat()}',
+                'Description': f'SmugDups duplicate review album created {datetime.now().isoformat()}',
                 'SortMethod': 'DateTimeOriginal',
                 'SortDirection': 'Ascending',
-                'Keywords': ['MugMatch', 'Duplicates', 'Review'],
+                'Keywords': ['SmugDups', 'Duplicates', 'Review'],
                 'SmugSearchable': False,
                 'WorldSearchable': False
             }
@@ -182,11 +182,11 @@ class SmugMugFolderOperations:
             return None
     
     def find_or_create_mugmatch_folder(self, username: str) -> Optional[str]:
-        """Find existing MugMatch folder or create a new one"""
+        """Find existing SmugDups folder or create a new one"""
         try:
-            print("Looking for existing MugMatch folders...")
+            print("Looking for existing SmugDups folders...")
             
-            # Get user's albums to see if we have any MugMatch folders
+            # Get user's albums to see if we have any SmugDups folders
             albums_url = f"{self.base_url}/user/{username}!albums"
             params = {'_filter': 'Name,AlbumKey,Description'}
             
@@ -195,13 +195,13 @@ class SmugMugFolderOperations:
             if response and 'Response' in response:
                 albums = response['Response'].get('Album', [])
                 
-                # Look for existing MugMatch albums
+                # Look for existing SmugDups albums
                 for album in albums:
                     album_name = album.get('Name', '')
-                    if 'MugMatch' in album_name and 'Review' in album_name:
+                    if 'SmugDups' in album_name and 'Review' in album_name:
                         album_key = album.get('AlbumKey', '')
                         if album_key:
-                            print(f"✅ Found existing MugMatch review album: {album_name}")
+                            print(f"✅ Found existing SmugDups review album: {album_name}")
                             return album_key
             
             # If no existing album found, create a new one
@@ -216,7 +216,7 @@ class SmugMugFolderOperations:
                 return None
                 
         except Exception as e:
-            print(f"Error finding/creating MugMatch folder: {e}")
+            print(f"Error finding/creating SmugDups folder: {e}")
             return None
     
     def setup_review_system(self, username: str) -> Optional[Dict[str, str]]:
@@ -224,7 +224,7 @@ class SmugMugFolderOperations:
         try:
             print(f"🔧 Setting up review system for {username}...")
             
-            # Try to find or create a MugMatch review album
+            # Try to find or create a SmugDups review album
             album_key = self.find_or_create_mugmatch_folder(username)
             
             if album_key:
@@ -234,7 +234,7 @@ class SmugMugFolderOperations:
                 
                 if album_response and 'Response' in album_response:
                     album_data = album_response['Response']['Album']
-                    album_name = album_data.get('Name', 'MugMatch Review')
+                    album_name = album_data.get('Name', 'SmugDups Review')
                     web_uri = album_data.get('WebUri', f'https://smugmug.com/album/{album_key}')
                     
                     review_info = {
@@ -400,7 +400,7 @@ def test_complete_system():
         
         if test_success:
             print(f"\n🎉 SUCCESS! The review system is working!")
-            print(f"   You can now integrate this into MugMatch")
+            print(f"   You can now integrate this into SmugDups")
             print(f"   Visit {review_info['web_url']} to see the test image")
         else:
             print(f"\n⚠️  Review system created but image copying needs work")

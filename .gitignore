@@ -12,6 +12,7 @@ __pycache__/
 *.so
 .pytest_cache/
 tmp/
+old_code/
 
 # Virtual environment
 venv/
@@ -35,6 +36,7 @@ mugmatch_cache/*
 *.tmp
 docs/
 utils/
+Claude_NewChat_Artifact.rtf
 
 # Logs
 *.log

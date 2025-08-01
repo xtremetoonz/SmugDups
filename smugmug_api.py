@@ -1,5 +1,5 @@
 """
-SmugMug API Adapter for MugMatch v2.1 - FIXED VERSION
+SmugMug API Adapter for SmugDups v5.0 - FIXED VERSION
 File: smugmug_api.py
 Incorporates the redirect handling fix from SmugMug engineering
 This resolves the OAuth nonce_used errors
@@ -55,7 +55,7 @@ class SmugMugAPIAdapter:
         try:
             headers = {
                 'Accept': 'application/json',
-                'User-Agent': 'MugMatch/2.0-Fixed'
+                'User-Agent': 'SmugDups/2.0-Fixed'
             }
             
             if data and method in ['POST', 'PUT', 'PATCH', 'DELETE']:
@@ -63,8 +63,7 @@ class SmugMugAPIAdapter:
             
             # Create fresh OAuth for each request
             auth = self._create_oauth()
-            
-            # CRITICAL FIX: Disable automatic redirects
+
             if method == 'GET':
                 response = requests.get(url, auth=auth, headers=headers, params=params, 
                                       allow_redirects=False, timeout=30)
@@ -115,9 +114,7 @@ class SmugMugAPIAdapter:
                         redirect_url = f"https://api.smugmug.com{redirect_location}"
                     else:
                         redirect_url = f"https://api.smugmug.com/api/v2/{redirect_location}"
-                
-                print(f"🔄 Following redirect: {redirect_url}")
-                
+
                 # Make new request to redirect URL with FRESH OAuth
                 return self._make_request(redirect_url, original_method, original_params, original_data)
             else:
@@ -305,7 +302,7 @@ class SmugMugAPIAdapter:
                     return True, "Image deleted successfully"
                 else:
                     # Log the actual response for debugging
-                    print(f"🔍 Unexpected response format: {response}")
+                    
                     error_msg = response.get('Message', f'Unexpected response: {response}')
                     print(f"❌ Delete failed: {error_msg}")
                     return False, error_msg
@@ -337,7 +334,6 @@ class SmugMugAPIAdapter:
         
         return None
 
-
 # Integration functions
 def create_smugmug_api(credentials_file: str = "credentials.py") -> SmugMugAPIAdapter:
     """Create a SmugMug API instance using your existing credentials file"""
@@ -358,7 +354,6 @@ def create_smugmug_api(credentials_file: str = "credentials.py") -> SmugMugAPIAd
         print(f"Failed to load credentials from {credentials_file}: {e}")
         return None
 
-
 # Utility functions
 def format_file_size(size_bytes: int) -> str:
     """Format file size in human readable format"""
@@ -373,7 +368,6 @@ def format_file_size(size_bytes: int) -> str:
     
     return f"{size_bytes:.1f} {size_names[i]}"
 
-
 def format_date(date_string: str) -> str:
     """Format SmugMug date string for display"""
     try:
@@ -382,7 +376,6 @@ def format_date(date_string: str) -> str:
         return dt.strftime("%Y-%m-%d %H:%M")
     except:
         return date_string
-
 
 def calculate_savings(duplicate_groups: List[List[Dict]]) -> Dict[str, int]:
     """Calculate potential storage savings from removing duplicates"""

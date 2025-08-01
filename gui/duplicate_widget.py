@@ -1,6 +1,7 @@
 """
-Widget to display and manage a group of duplicate photos v2.6
+Widget to display and manage a group of duplicate photos for SmugDups v5.0
 File: gui/duplicate_widget.py
+UPDATED: Rebranded from SmugDups and now uses WORKING moveimages
 """
 
 from typing import List, Optional
@@ -15,7 +16,7 @@ from core.models import DuplicatePhoto
 from .photo_preview import PhotoPreviewWidget
 
 class DuplicateGroupWidget(QWidget):
-    """Widget to display and manage a group of duplicate photos"""
+    """Widget to display and manage a group of duplicate photos - SmugDups v5.0"""
     
     selection_changed = pyqtSignal()
     
@@ -31,12 +32,12 @@ class DuplicateGroupWidget(QWidget):
         """Debug method to show current selection state"""
         print(f"\n🔍 DEBUG: Selection state for duplicate group:")
         for i, photo in enumerate(self.duplicates):
-            status = "KEEP" if photo.keep else "move"
+            status = "KEEP" if photo.keep else "MOVE"
             print(f"   {i}: {photo.filename} from {photo.album_name} → {status}")
         
         selected_count = sum(1 for photo in self.duplicates if photo.keep)
         print(f"   Total selected to keep: {selected_count}")
-        print(f"   Total to copy: {len(self.duplicates) - selected_count}")
+        print(f"   Total to move: {len(self.duplicates) - selected_count}")
         
     def _setup_ui(self):
         """Set up the user interface"""
@@ -121,30 +122,30 @@ class DuplicateGroupWidget(QWidget):
         return status_feedback
     
     def _create_action_buttons(self) -> QHBoxLayout:
-        """Create the action buttons layout"""
+        """Create the action buttons layout - UPDATED FOR WORKING MOVES"""
         button_layout = QHBoxLayout()
         button_layout.setSpacing(15)
         
-        # Delete Selected button
-        delete_btn = QPushButton("🗑️ Delete Selected Duplicate")
+        # Delete Selected button (permanent deletion)
+        delete_btn = QPushButton("🗑️ Delete Selected Duplicates")
         delete_btn.clicked.connect(self.delete_selected_action)
-        delete_btn.setToolTip("Delete the photos that are NOT selected to keep")
+        delete_btn.setToolTip("Permanently delete the photos that are NOT selected to keep")
         delete_btn.setMinimumHeight(45)
         delete_btn.setStyleSheet(self._get_delete_button_style())
         button_layout.addWidget(delete_btn)
         
-        # UPDATED: Copy to Review Album button
-        move_btn = QPushButton("📋 Copy to Review Album")
-        move_btn.clicked.connect(self.copy_selected_to_review_action)  # Keep same method name for compatibility
-        move_btn.setToolTip("Copy duplicates to a review album for manual deletion later (removes from source albums)")
+        # UPDATED: Move to Review Album button (now with WORKING moves!)
+        move_btn = QPushButton("📦 Move to Review Album")
+        move_btn.clicked.connect(self.move_selected_to_review_action)
+        move_btn.setToolTip("Move duplicates to review album (removes from source albums) - NOW WITH WORKING MOVEIMAGES!")
         move_btn.setMinimumHeight(45)
-        move_btn.setStyleSheet(self._get_copy_button_style())  # Keep same style
+        move_btn.setStyleSheet(self._get_move_button_style())
         button_layout.addWidget(move_btn)
         
         # Skip button
         skip_btn = QPushButton("🚫 Skip This Group")
         skip_btn.clicked.connect(self.skip_group_action)
-        skip_btn.setToolTip("Skip this duplicate group - don't delete any copies")
+        skip_btn.setToolTip("Skip this duplicate group - don't move or delete any copies")
         skip_btn.setMinimumHeight(45)
         skip_btn.setStyleSheet(self._get_skip_button_style())
         button_layout.addWidget(skip_btn)
@@ -240,9 +241,9 @@ class DuplicateGroupWidget(QWidget):
             self.duplicates[i].keep = radio.isChecked()
         self.selection_changed.emit()
     
-    # Action Methods
-    def copy_selected_to_review_action(self):
-        """Move ONLY the appropriate duplicates to review album - FIXED VERSION"""
+    # Action Methods - UPDATED FOR WORKING MOVEIMAGES
+    def move_selected_to_review_action(self):
+        """Move duplicates to review album using WORKING moveimages - SmugDups v5.0"""
         try:
             import credentials
             from operations import EnhancedPhotoCopyMoveOperations
@@ -253,23 +254,23 @@ class DuplicateGroupWidget(QWidget):
                 self.show_feedback("❌ No API connection available", False)
                 return
             
-            # FIXED: Determine which photos to copy based on user selection
+            # Determine which photos to move based on user selection
             selected_count = sum(1 for photo in self.duplicates if photo.keep)
             
             if selected_count == 0:
-                # No photo selected to keep - copy all to review for manual decision
+                # No photo selected to keep - move all to review for manual decision
                 photos_to_move = self.duplicates.copy()
                 action_description = f"No photo selected to keep. Moving all {len(photos_to_move)} photos to review album."
-                print(f"📋 {action_description}")
+                print(f"📦 {action_description}")
             elif selected_count == 1:
-                # One photo selected to keep - copy only the others to review  
+                # One photo selected to keep - move only the others to review  
                 photos_to_move = [photo for photo in self.duplicates if not photo.keep]
                 kept_photo = [photo for photo in self.duplicates if photo.keep][0]
                 action_description = f"Keeping {kept_photo.filename}. Moving {len(photos_to_move)} duplicate(s) to review album."
-                print(f"📋 {action_description}")
+                print(f"📦 {action_description}")
                 print(f"   ✅ KEEPING: {kept_photo.filename} from {kept_photo.album_name}")
                 for photo in photos_to_move:
-                    print(f"   📋 COPYING: {photo.filename} from {photo.album_name}")
+                    print(f"   📦 MOVING: {photo.filename} from {photo.album_name}")
             else:
                 # Multiple photos selected - this shouldn't happen with radio buttons, but handle it
                 photos_to_move = self.duplicates.copy()
@@ -277,25 +278,25 @@ class DuplicateGroupWidget(QWidget):
                 print(f"⚠️  {action_description}")
             
             if not photos_to_move:
-                self.show_feedback("✅ No photos need to be copies - all duplicates are selected to keep", True)
+                self.show_feedback("✅ No photos need to be moved - all duplicates are selected to keep", True)
                 return
             
-            # Initialize enhanced move operations
+            # Initialize enhanced move operations with WORKING moveimages
             move_ops = EnhancedPhotoCopyMoveOperations(main_window.api)
             
             # Show processing feedback
-            self.show_feedback(f"🔄 Processing {len(photos_to_move)} photo(s)...", None)
+            self.show_feedback(f"🔄 Moving {len(photos_to_move)} photo(s) with WORKING moveimages...", None)
             
-            # FIXED: Process only the photos that should be copied
+            # Process using WORKING moveimages functionality
             results = move_ops.process_duplicates_for_review([photos_to_move], credentials.USER_NAME)
             
             if not results['success']:
                 if results.get('manual_creation_needed'):
                     # Show manual creation instructions
                     instructions = results.get('instructions', 'Manual album creation required')
-                    album_name = results.get('suggested_album_name', 'MugMatch_Review')
+                    album_name = results.get('suggested_album_name', 'SmugDups_Review')
                     
-                    feedback_msg = f"📋 Create album manually: {album_name}"
+                    feedback_msg = f"📦 Create album manually: {album_name}"
                     self.show_feedback(feedback_msg, False)
                     
                     # Print detailed instructions to console
@@ -308,18 +309,18 @@ class DuplicateGroupWidget(QWidget):
                 
                 return
             
-            # FIXED: Show accurate results for MOVE operations (backward compatible)
-            successful = results.get('successful_moves', results.get('successful_copies', 0))
-            failed = results.get('failed_moves', results.get('failed_copies', 0))
+            # Show results for WORKING moveimages
+            successful = results.get('successful_moves', 0)
+            failed = results.get('failed_moves', 0)
             album_info = results['review_album']
             album_name = album_info['album_name']
             
             if successful > 0:
                 if failed > 0:
                     success_msg = f"✅ Moved {successful}/{successful + failed} photos to {album_name}"
-                    print(f"⚠️  {failed} photos failed to copy - see console for details")
+                    print(f"⚠️  {failed} photos failed to move - see console for details")
                 else:
-                    success_msg = f"✅ All {successful} photos copied to {album_name}!"
+                    success_msg = f"🎉 All {successful} photos moved to {album_name}!"
                 
                 self.show_feedback(success_msg, True)
                 
@@ -328,23 +329,23 @@ class DuplicateGroupWidget(QWidget):
                     print(f"🌐 Review album: {album_info['web_url']}")
                     
             else:
-                # All copies failed - provide helpful guidance
+                # All moves failed - provide helpful guidance
                 if failed > 0:
-                    failure_msg = f"❌ Failed to copy {failed} photos. Manual moving needed."
+                    failure_msg = f"❌ Failed to move {failed} photos. Check console for details."
                     self.show_feedback(failure_msg, False)
                     
                     if album_info.get('web_url'):
                         print(f"💡 Manual moving instructions:")
                         print(f"   1. Visit: {album_info['web_url']}")
-                        print(f"   2. Use SmugMug's 'Collect' feature to add these photos:")
+                        print(f"   2. Use SmugMug's 'Move' or 'Organize' feature to move these photos:")
                         for photo in photos_to_move:
                             print(f"      - {photo.filename} from {photo.album_name}")
                 else:
                     # This shouldn't happen, but handle it
-                    manual_msg = f"📋 Photos need manual moving to {album_name}"
+                    manual_msg = f"📦 Photos need manual moving to {album_name}"
                     self.show_feedback(manual_msg, None)
             
-            # Mark as processed only if some copies were successful
+            # Mark as processed if moves were successful
             if successful > 0:
                 self.mark_as_processed()
                 
@@ -353,6 +354,13 @@ class DuplicateGroupWidget(QWidget):
             self.show_feedback(error_msg, False)
             import traceback
             traceback.print_exc()
+    
+    # Keep the old method name for backwards compatibility during transition
+    def copy_selected_to_review_action(self):
+        """Backwards compatibility - redirects to move action"""
+        print("⚠️  WARNING: copy_selected_to_review_action is deprecated!")
+        print("   🎯 Now using move_selected_to_review_action for WORKING moves")
+        self.move_selected_to_review_action()
             
     def delete_selected_action(self):
         """Handle the delete selected action"""
@@ -370,7 +378,7 @@ class DuplicateGroupWidget(QWidget):
         photos_to_delete = [photo for photo in self.duplicates if not photo.keep]
         photos_to_keep = [photo for photo in self.duplicates if photo.keep]
         
-        print(f"\n🗑️  ACTUAL DELETION STARTING...")
+        print(f"\n🗑️  PERMANENT DELETION STARTING...")
         print(f"Will delete {to_delete_count} photos, keeping 1")
         
         for photo in photos_to_keep:
@@ -382,17 +390,11 @@ class DuplicateGroupWidget(QWidget):
         # Show processing feedback
         self.show_feedback(f"🔄 Deleting {to_delete_count} duplicate photo(s)...", None)
         
-        # Perform actual deletion
+        # Perform actual deletion using the fixed API
         try:
-            import credentials
-            from smugmug_api import SmugMugAPIAdapter
-            
-            api = SmugMugAPIAdapter(
-                api_key=credentials.API_KEY,
-                api_secret=credentials.API_SECRET,
-                access_token=credentials.ACCESS_TOKEN,
-                access_secret=credentials.ACCESS_SECRET
-            )
+            # Get API reference from main window
+            main_window = self.window()
+            api = main_window.api
             
             # Delete each photo that's not marked to keep
             deletion_results = []
@@ -537,14 +539,14 @@ class DuplicateGroupWidget(QWidget):
             QPushButton:pressed { background-color: #c62828; }
         """
     
-    def _get_copy_button_style(self) -> str:
+    def _get_move_button_style(self) -> str:  # RENAMED from _get_copy_button_style
         return """
             QPushButton {
-                background-color: #2196F3; border: 1px solid #1976D2;
+                background-color: #4CAF50; border: 1px solid #45a049;
                 font-weight: bold; font-size: 13px; color: white;
             }
-            QPushButton:hover { background-color: #1976D2; }
-            QPushButton:pressed { background-color: #0D47A1; }
+            QPushButton:hover { background-color: #45a049; }
+            QPushButton:pressed { background-color: #3d8b40; }
         """
     
     def _get_skip_button_style(self) -> str:
