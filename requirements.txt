@@ -1,6 +1,8 @@
 # SmugDups v5.0 - SmugMug Duplicate Photo Manager
 # Python package requirements
 
+# File: requirements.txt
+
 # GUI Framework
 PyQt6>=6.4.0
 

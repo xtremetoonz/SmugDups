@@ -1,8 +1,7 @@
 """
-SmugMug API Adapter for SmugDups v5.0 - FIXED VERSION
+SmugMug API Adapter for SmugDups v5.1 - Geographic Data Addition
 File: smugmug_api.py
-Incorporates the redirect handling fix from SmugMug engineering
-This resolves the OAuth nonce_used errors
+ENHANCEMENT: Added GPS coordinates (latitude, longitude, altitude) support
 """
 
 import requests
@@ -13,8 +12,7 @@ import time
 
 class SmugMugAPIAdapter:
     """
-    Fixed SmugMug API adapter that handles redirects properly
-    This resolves the OAuth nonce_used errors
+    SmugMug API adapter with geographic metadata support
     """
     
     def __init__(self, api_key: str, api_secret: str, access_token: str, access_secret: str):
@@ -28,7 +26,7 @@ class SmugMugAPIAdapter:
         self.last_request_time = 0
         self.min_request_interval = 0.1  # 100ms between requests
         
-        print(f"SmugMug API initialized with FIXED redirect handling")
+        print(f"SmugMug API initialized with GEOGRAPHIC METADATA support")
     
     def _create_oauth(self) -> OAuth1:
         """Create fresh OAuth instance for each request"""
@@ -42,10 +40,7 @@ class SmugMugAPIAdapter:
         )
     
     def _make_request(self, url: str, method: str = 'GET', params: Dict = None, data: Dict = None) -> Optional[Dict]:
-        """
-        Make API request with FIXED redirect handling
-        KEY FIX: Disables automatic redirects and handles them manually with fresh OAuth
-        """
+        """Make API request with FIXED redirect handling"""
         # Rate limiting
         current_time = time.time()
         time_since_last = current_time - self.last_request_time
@@ -55,7 +50,7 @@ class SmugMugAPIAdapter:
         try:
             headers = {
                 'Accept': 'application/json',
-                'User-Agent': 'SmugDups/2.0-Fixed'
+                'User-Agent': 'SmugDups/5.1-Geographic'
             }
             
             if data and method in ['POST', 'PUT', 'PATCH', 'DELETE']:
@@ -184,12 +179,12 @@ class SmugMugAPIAdapter:
         return albums
     
     def get_album_images(self, album_key: str) -> List[Dict]:
-        """Fetch all images from an album with their MD5 hashes and thumbnail URLs"""
+        """Fetch all images from an album with geographic metadata support"""
         images = []
         start = 1
         count = 100
         
-        print(f"Fetching images for album: {album_key}")
+        print(f"Fetching images with geographic data for album: {album_key}")
         
         # Get album info for metadata
         album_info = self.get_album_info(album_key)
@@ -200,7 +195,8 @@ class SmugMugAPIAdapter:
             params = {
                 'start': start,
                 'count': count,
-                '_filter': 'ImageKey,FileName,ArchivedMD5,ArchivedSize,Date,WebUri,ThumbnailUrl'
+                # ENHANCED: Added GPS coordinates to filter
+                '_filter': 'ImageKey,FileName,ArchivedMD5,ArchivedSize,Date,WebUri,ThumbnailUrl,Title,Caption,Keywords,DateTimeOriginal,Latitude,Longitude,Altitude'
             }
             
             response = self._make_request(url, 'GET', params)
@@ -222,7 +218,8 @@ class SmugMugAPIAdapter:
                     if not md5_hash:
                         continue
                     
-                    images.append({
+                    # Enhanced metadata extraction with GPS coordinates
+                    image_record = {
                         'image_id': image_key,
                         'filename': image.get('FileName', f"image_{image_key}"),
                         'album_name': album_name,
@@ -231,8 +228,19 @@ class SmugMugAPIAdapter:
                         'url': image.get('WebUri', ''),
                         'size': image.get('ArchivedSize', 0),
                         'date_uploaded': image.get('Date', ''),
-                        'thumbnail_url': image.get('ThumbnailUrl', '')
-                    })
+                        'thumbnail_url': image.get('ThumbnailUrl', ''),
+                        # Enhanced metadata with safe extraction
+                        'title': self._safe_get_string(image, 'Title'),
+                        'caption': self._safe_get_string(image, 'Caption'),
+                        'keywords': self._safe_get_string(image, 'Keywords'),
+                        'date_taken': self._safe_get_string(image, 'DateTimeOriginal'),
+                        # NEW: Geographic data
+                        'latitude': self._safe_get_float(image, 'Latitude'),
+                        'longitude': self._safe_get_float(image, 'Longitude'),
+                        'altitude': self._safe_get_float(image, 'Altitude')
+                    }
+                    
+                    images.append(image_record)
                     
                 except Exception as e:
                     print(f"Error processing image {image_key}: {e}")
@@ -246,6 +254,28 @@ class SmugMugAPIAdapter:
         print(f"Total images found in album {album_key}: {len(images)}")
         return images
     
+    def _safe_get_string(self, data: dict, key: str) -> str:
+        """Safely extract string value from API response"""
+        try:
+            value = data.get(key, '')
+            if value is None:
+                return ''
+            return str(value).strip()
+        except Exception as e:
+            print(f"Warning: Error extracting {key}: {e}")
+            return ''
+    
+    def _safe_get_float(self, data: dict, key: str) -> Optional[float]:
+        """Safely extract float value from API response"""
+        try:
+            value = data.get(key)
+            if value is None or value == '':
+                return None
+            return float(value)
+        except (ValueError, TypeError) as e:
+            print(f"Warning: Error extracting float {key}: {e}")
+            return None
+
     def get_album_info(self, album_key: str) -> Optional[Dict]:
         """Get basic album information using SmugMug API v2"""
         url = f"{self.base_url}/album/{album_key}"

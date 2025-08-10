@@ -1,19 +1,19 @@
 """
-Photo preview widget for displaying thumbnails and metadata v5.0
+Photo preview widget for displaying thumbnails and metadata v5.1
 File: gui/photo_preview.py
-UPDATED: SmugDups v5.0 with correct cache directory naming
+UPDATED: Windows-compatible image handling with proper PIL/PyQt6 integration
 """
 
 import os
+import sys
 import requests
 from PyQt6.QtWidgets import QWidget, QVBoxLayout, QLabel, QProgressBar
 from PyQt6.QtCore import QThread, pyqtSignal, Qt
-from PyQt6.QtGui import QPixmap, QPainter, QColor, QFont, QFontMetrics, QPen
-from PIL import Image
+from PyQt6.QtGui import QPixmap, QPainter, QColor, QFont, QFontMetrics, QPen, QImage
 from core.models import DuplicatePhoto
 
 class PhotoPreviewWidget(QWidget):
-    """Widget to display photo preview and metadata - SmugDups v5.0"""
+    """Widget to display photo preview and metadata - Windows Compatible v5.1"""
     
     def __init__(self):
         super().__init__()
@@ -23,19 +23,33 @@ class PhotoPreviewWidget(QWidget):
         self._setup_ui()
         
     def _setup_cache_directory(self) -> str:
-        """Create and return path to thumbnail cache directory - UPDATED for SmugDups"""
-        cache_dir = os.path.join(os.getcwd(), 'smugdups_cache', 'thumbnails')
-        os.makedirs(cache_dir, exist_ok=True)
+        """Create and return path to thumbnail cache directory - Windows compatible"""
+        # Use platform-appropriate cache directory
+        if sys.platform.startswith('win'):
+            cache_base = os.path.expanduser('~\\AppData\\Local\\SmugDups')
+        else:
+            cache_base = os.path.join(os.getcwd(), 'smugdups_cache')
         
-        # Create .gitignore in cache directory
-        gitignore_path = os.path.join(os.path.dirname(cache_dir), '.gitignore')
-        if not os.path.exists(gitignore_path):
-            with open(gitignore_path, 'w') as f:
-                f.write("# SmugDups cache directory\n")
-                f.write("thumbnails/\n")
-                f.write("*.jpg\n")
-                f.write("*.png\n")
-                f.write("*.tmp\n")
+        cache_dir = os.path.join(cache_base, 'thumbnails')
+        
+        try:
+            os.makedirs(cache_dir, exist_ok=True)
+            
+            # Create .gitignore in cache directory
+            gitignore_path = os.path.join(cache_base, '.gitignore')
+            if not os.path.exists(gitignore_path):
+                with open(gitignore_path, 'w', encoding='utf-8') as f:
+                    f.write("# SmugDups cache directory\n")
+                    f.write("thumbnails/\n")
+                    f.write("*.jpg\n")
+                    f.write("*.png\n")
+                    f.write("*.tmp\n")
+        except Exception as e:
+            print(f"Warning: Could not create cache directory: {e}")
+            # Fallback to temp directory
+            import tempfile
+            cache_dir = os.path.join(tempfile.gettempdir(), 'smugdups_thumbnails')
+            os.makedirs(cache_dir, exist_ok=True)
         
         return cache_dir
         
@@ -89,7 +103,7 @@ class PhotoPreviewWidget(QWidget):
         return scaled_pixmap
         
     def _load_thumbnail(self, photo: DuplicatePhoto):
-        """Load and display thumbnail image"""
+        """Load and display thumbnail image - Windows compatible"""
         # Check memory cache first
         cache_key = photo.image_id
         if cache_key in self.thumbnail_cache:
@@ -98,16 +112,21 @@ class PhotoPreviewWidget(QWidget):
             self.photo_label.setPixmap(scaled_pixmap)
             return
         
-        # Check disk cache
-        cache_file = os.path.join(self.cache_dir, f"{cache_key}.jpg")
+        # Check disk cache - Windows safe filename
+        safe_filename = self._make_windows_safe_filename(cache_key)
+        cache_file = os.path.join(self.cache_dir, f"{safe_filename}.jpg")
+        
         if os.path.exists(cache_file):
             try:
-                pixmap = QPixmap(cache_file)
-                if not pixmap.isNull():
+                pixmap = QPixmap()
+                # Windows compatible file loading
+                if pixmap.load(cache_file):
                     self.thumbnail_cache[cache_key] = pixmap  # Store original in cache
                     scaled_pixmap = self._scale_pixmap_to_fit(pixmap)
                     self.photo_label.setPixmap(scaled_pixmap)
                     return
+                else:
+                    print(f"Failed to load cached thumbnail: {cache_file}")
             except Exception as e:
                 print(f"Failed to load cached thumbnail: {e}")
                 try:
@@ -123,9 +142,23 @@ class PhotoPreviewWidget(QWidget):
         
         # Start download in background thread
         self._start_thumbnail_download(photo, thumbnail_url, cache_file)
+    
+    def _make_windows_safe_filename(self, filename: str) -> str:
+        """Make filename safe for Windows filesystem"""
+        # Remove or replace invalid Windows filename characters
+        invalid_chars = '<>:"/\\|?*'
+        safe_name = filename
+        for char in invalid_chars:
+            safe_name = safe_name.replace(char, '_')
+        
+        # Limit filename length (Windows has 255 char limit)
+        if len(safe_name) > 200:
+            safe_name = safe_name[:200]
+        
+        return safe_name
         
     def _start_thumbnail_download(self, photo: DuplicatePhoto, thumbnail_url: str, cache_file: str):
-        """Start thumbnail download in background thread"""
+        """Start thumbnail download in background thread - Windows compatible"""
         
         class ThumbnailDownloader(QThread):
             download_complete = pyqtSignal(object, str)
@@ -159,24 +192,39 @@ class PhotoPreviewWidget(QWidget):
                             if chunk:
                                 image_data += chunk
                         
-                        # Save to disk cache
+                        # Windows-compatible file writing
                         temp_file = self.cache_file + '.tmp'
-                        with open(temp_file, 'wb') as f:
-                            f.write(image_data)
-                        
-                        # Verify it's a valid image
-                        pil_image = Image.open(temp_file)
-                        
-                        # Move temp file to final location
-                        os.rename(temp_file, self.cache_file)
-                        
-                        # Convert to QPixmap
-                        pixmap = QPixmap(self.cache_file)
-                        
-                        if not pixmap.isNull():
-                            self.download_complete.emit(pixmap, self.photo.image_id)
-                        else:
-                            self.download_failed.emit("Invalid image format")
+                        try:
+                            with open(temp_file, 'wb') as f:
+                                f.write(image_data)
+                            
+                            # WINDOWS COMPATIBLE: Load image through QPixmap instead of PIL
+                            test_pixmap = QPixmap()
+                            if test_pixmap.loadFromData(image_data):
+                                # Image is valid, move temp file to final location
+                                if os.path.exists(self.cache_file):
+                                    os.remove(self.cache_file)
+                                os.rename(temp_file, self.cache_file)
+                                
+                                # Create final pixmap from file (more reliable on Windows)
+                                final_pixmap = QPixmap(self.cache_file)
+                                if not final_pixmap.isNull():
+                                    self.download_complete.emit(final_pixmap, self.photo.image_id)
+                                else:
+                                    self.download_failed.emit("Failed to create pixmap from file")
+                            else:
+                                self.download_failed.emit("Invalid image format")
+                                if os.path.exists(temp_file):
+                                    os.remove(temp_file)
+                                    
+                        except Exception as e:
+                            self.download_failed.emit(f"File write error: {e}")
+                            for cleanup_file in [temp_file, self.cache_file]:
+                                if os.path.exists(cleanup_file):
+                                    try:
+                                        os.remove(cleanup_file)
+                                    except:
+                                        pass
                     else:
                         self.download_failed.emit(f"HTTP {response.status_code}")
                         
@@ -207,7 +255,7 @@ class PhotoPreviewWidget(QWidget):
             self._create_enhanced_placeholder(self.current_photo)
         
     def _create_enhanced_placeholder(self, photo: DuplicatePhoto):
-        """Create an enhanced placeholder with photo info"""
+        """Create an enhanced placeholder with photo info - Windows compatible"""
         # Create placeholder that matches the display area
         pixmap = QPixmap(276, 196)  # Match the scaled size
         pixmap.fill(QColor(35, 35, 35))
@@ -257,9 +305,32 @@ class PhotoPreviewWidget(QWidget):
         # SmugDups watermark
         painter.setFont(QFont("Arial", 8))
         painter.setPen(QColor(100, 100, 100))
-        painter.drawText(5, 190, "SmugDups v5.0")
+        painter.drawText(5, 190, "SmugDups v5.1")
         
         painter.end()
         
         # Display the placeholder
         self.photo_label.setPixmap(pixmap)
+
+    # Windows compatibility helper methods
+    def clear_cache(self):
+        """Clear thumbnail cache (useful for troubleshooting)"""
+        self.thumbnail_cache.clear()
+        
+    def get_cache_size(self) -> tuple:
+        """Get cache statistics for debugging"""
+        memory_count = len(self.thumbnail_cache)
+        disk_count = 0
+        disk_size = 0
+        
+        try:
+            if os.path.exists(self.cache_dir):
+                for filename in os.listdir(self.cache_dir):
+                    if filename.endswith('.jpg'):
+                        file_path = os.path.join(self.cache_dir, filename)
+                        disk_count += 1
+                        disk_size += os.path.getsize(file_path)
+        except Exception as e:
+            print(f"Cache size calculation error: {e}")
+        
+        return memory_count, disk_count, disk_size

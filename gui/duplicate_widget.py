@@ -1,22 +1,21 @@
 """
-Widget to display and manage a group of duplicate photos for SmugDups v5.0
+Widget to display and manage a group of duplicate photos for SmugDups v5.1
 File: gui/duplicate_widget.py
-UPDATED: Rebranded from SmugDups and now uses WORKING moveimages
+FINAL CLEAN VERSION: Always visible metadata, no expandable sections
 """
 
 from typing import List, Optional
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QScrollArea,
-    QPushButton, QRadioButton, QButtonGroup
+    QPushButton, QRadioButton, QButtonGroup, QFrame
 )
 from PyQt6.QtCore import pyqtSignal, Qt
-from PyQt6.QtGui import QColor
 
 from core.models import DuplicatePhoto
 from .photo_preview import PhotoPreviewWidget
 
 class DuplicateGroupWidget(QWidget):
-    """Widget to display and manage a group of duplicate photos - SmugDups v5.0"""
+    """Widget to display and manage a group of duplicate photos - SmugDups v5.1 Final"""
     
     selection_changed = pyqtSignal()
     
@@ -28,23 +27,12 @@ class DuplicateGroupWidget(QWidget):
         self.preview_widgets = []
         self._setup_ui()
     
-    def debug_selection_state(self):
-        """Debug method to show current selection state"""
-        print(f"\n🔍 DEBUG: Selection state for duplicate group:")
-        for i, photo in enumerate(self.duplicates):
-            status = "KEEP" if photo.keep else "MOVE"
-            print(f"   {i}: {photo.filename} from {photo.album_name} → {status}")
-        
-        selected_count = sum(1 for photo in self.duplicates if photo.keep)
-        print(f"   Total selected to keep: {selected_count}")
-        print(f"   Total to move: {len(self.duplicates) - selected_count}")
-        
     def _setup_ui(self):
         """Set up the user interface"""
         layout = QVBoxLayout()
         layout.setSpacing(15)
         
-        # Group header with summary
+        # Group header
         header = self._create_header()
         layout.addWidget(header)
         
@@ -63,10 +51,53 @@ class DuplicateGroupWidget(QWidget):
         self.setLayout(layout)
     
     def _create_header(self) -> QLabel:
-        """Create the group header with summary information"""
+        """Create group header with summary information"""
+        # Calculate group statistics
         waste_size = sum(photo.size for photo in self.duplicates[1:])
         waste_mb = waste_size / (1024*1024)
-        header_text = f"Duplicate Group ({len(self.duplicates)} copies) - Wasting {waste_mb:.1f} MB"
+        quality_scores = [photo.get_quality_score() for photo in self.duplicates]
+        best_score = max(quality_scores) if quality_scores else 0
+        dates_with_taken = sum(1 for photo in self.duplicates if photo.has_date_taken())
+        photos_with_gps = sum(1 for photo in self.duplicates if photo.has_location())
+        
+        # Smart recommendation analysis
+        recommended_photo = next((photo for photo in self.duplicates if photo.keep), None)
+        recommendation_reason = ""
+        
+        if recommended_photo:
+            reasons = []
+            if recommended_photo.size == max(photo.size for photo in self.duplicates):
+                reasons.append("largest file")
+            if recommended_photo.has_title():
+                reasons.append("has title")
+            if recommended_photo.has_caption() or recommended_photo.has_keywords():
+                reasons.append("rich metadata")
+            if recommended_photo.has_location():
+                reasons.append("has GPS")
+            
+            date_comp = recommended_photo.get_date_comparison()
+            if date_comp['has_both_dates'] and date_comp['status'] in ['immediate', 'same_day']:
+                reasons.append("uploaded soon after taking")
+            
+            if reasons:
+                recommendation_reason = f" (recommended: {', '.join(reasons[:2])})"
+        
+        # Build header text
+        header_parts = [
+            f"Duplicate Group ({len(self.duplicates)} copies)",
+            f"Wasting {waste_mb:.1f} MB"
+        ]
+        
+        if best_score >= 5:
+            header_parts.append(f"Quality range: {min(quality_scores)}-{best_score}")
+        
+        if dates_with_taken > 0:
+            header_parts.append(f"{dates_with_taken} with date info")
+
+        if photos_with_gps > 0:
+            header_parts.append(f"{photos_with_gps} with GPS")
+        
+        header_text = " • ".join(header_parts) + recommendation_reason
         
         header = QLabel(header_text)
         header.setStyleSheet("""
@@ -78,32 +109,402 @@ class DuplicateGroupWidget(QWidget):
             border-radius: 8px;
             margin-bottom: 10px;
         """)
+        header.setWordWrap(True)
         return header
     
     def _create_photos_scroll_area(self) -> QScrollArea:
-        """Create horizontal scroll area with photo cards"""
+        """Create horizontal scroll area for photo cards"""
         scroll_area = QScrollArea()
         scroll_area.setWidgetResizable(True)
         scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
-        scroll_area.setMinimumHeight(520)
-        scroll_area.setMaximumHeight(600)
+        scroll_area.setMinimumHeight(700)
+        scroll_area.setMaximumHeight(1000)
         
         photos_widget = QWidget()
         photos_layout = QHBoxLayout(photos_widget)
         photos_layout.setSpacing(15)
+        photos_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
         
-        # Create a card for each duplicate photo
+        # Create cards for each duplicate photo
         for i, photo in enumerate(self.duplicates):
             card = self._create_photo_card(photo, i)
             photos_layout.addWidget(card)
-            
-        # Add stretch to push cards to the left
+        
         photos_layout.addStretch()
-            
         scroll_area.setWidget(photos_widget)
+        
         return scroll_area
     
+    def _create_photo_card(self, photo: DuplicatePhoto, index: int) -> QWidget:
+        """Create a card widget for a single photo"""
+        card = QWidget()
+        card.setFixedWidth(320)
+        
+        # Larger height to accommodate always-visible metadata
+        base_height = 650
+        if photo.has_enhanced_metadata():
+            # Add extra height based on amount of metadata
+            extra_height = 50
+            if photo.has_caption():
+                extra_height += 60
+            if photo.has_keywords():
+                extra_height += 40 + (len(photo.get_keywords_list()) // 3) * 25
+            if photo.has_date_taken():
+                extra_height += 70
+            base_height += extra_height
+        
+        card.setMinimumHeight(base_height)
+        
+        # Card styling based on selection state
+        base_style = """
+            QWidget {
+                background-color: #3c3c3c;
+                border-radius: 8px;
+                margin: 5px;
+            }
+        """
+        
+        if photo.keep:
+            card.setStyleSheet(base_style + """
+                QWidget {
+                    border: 2px solid #4CAF50;
+                    background-color: #404040;
+                }
+            """)
+        else:
+            card.setStyleSheet(base_style + """
+                QWidget {
+                    border: 2px solid #555555;
+                }
+            """)
+        
+        layout = QVBoxLayout(card)
+        layout.setSpacing(8)
+        layout.setContentsMargins(10, 10, 10, 10)
+        
+        # Radio button for selection
+        radio_text = "✓ Keep this copy"
+        if photo.keep:
+            score = photo.get_quality_score()
+            if score >= 8:
+                radio_text = "✓ Keep this copy (recommended - high quality)"
+            elif score >= 5:
+                radio_text = "✓ Keep this copy (recommended)"
+        
+        radio = QRadioButton(radio_text)
+        radio.setChecked(photo.keep)
+        radio.toggled.connect(self._on_selection_changed)
+        
+        radio_style = "font-weight: bold; font-size: 12px;"
+        if photo.keep:
+            radio_style += " color: #4CAF50;"
+        else:
+            radio_style += " color: #cccccc;"
+        
+        radio.setStyleSheet(radio_style)
+        self.button_group.addButton(radio, index)
+        self.radio_buttons.append(radio)
+        layout.addWidget(radio)
+        
+        # Photo preview
+        preview = PhotoPreviewWidget()
+        preview.setMinimumHeight(320)
+        preview.setMaximumHeight(350)
+        preview.display_photo(photo)
+        self.preview_widgets.append(preview)
+        layout.addWidget(preview)
+        
+        # All metadata (always visible)
+        metadata_widget = self._create_all_metadata(photo)
+        layout.addWidget(metadata_widget)
+        
+        layout.addStretch(1)
+        
+        return card
+    
+    def _create_all_metadata(self, photo: DuplicatePhoto) -> QWidget:
+        """Create metadata display with all information always visible"""
+        widget = QWidget()
+        layout = QVBoxLayout(widget)
+        layout.setSpacing(4)
+        layout.setContentsMargins(5, 5, 5, 5)
+        
+        # Format date with clear labeling
+        try:
+            if photo.date_uploaded and 'T' in photo.date_uploaded:
+                from datetime import datetime
+                dt = datetime.fromisoformat(photo.date_uploaded.replace('Z', '+00:00'))
+                short_date = dt.strftime("%m/%d/%y")
+                date_display = f"Uploaded: {short_date}"
+            else:
+                date_display = "Uploaded: Unknown"
+        except:
+            date_display = "Uploaded: Unknown"
+        
+        # Basic info lines (always visible)
+        info_lines = [
+            f"📁 {photo.short_album_name()}",
+            f"📄 {photo.short_filename()}"
+        ]
+        
+        # Add title display if present
+        if photo.has_title():
+            title_line = f"🏷️ {photo.display_title(28)}"
+            info_lines.insert(1, title_line)
+
+        # Add GPS coordinates to basic info if available
+        if photo.has_location():
+            location_line = f"📍 {photo.get_location_short()}"
+            info_lines.append(location_line)
+        
+        # Add file size and date
+        info_lines.append(f"📊 Size: {photo.size_mb():.1f} MB")
+        info_lines.append(f"📤 {date_display}")
+        
+        # Add quality indicator
+        quality_indicator = self._create_quality_indicator(photo)
+        if quality_indicator:
+            info_lines.append(quality_indicator)
+        
+        # Create basic metadata labels
+        for line in info_lines:
+            label = QLabel(line)
+            
+            if line.startswith("🏷️"):
+                # Title styling
+                label.setStyleSheet("""
+                    font-size: 11px; color: #87CEEB; font-weight: bold;
+                    padding: 4px 6px; background-color: rgba(60, 60, 60, 0.9);
+                    border-radius: 4px; margin: 1px;
+                    border: 1px solid rgba(135, 206, 235, 0.3);
+                """)
+            elif line.startswith("⭐"):
+                # Quality indicator styling
+                label.setStyleSheet("""
+                    font-size: 10px; color: #FFD700; font-weight: bold;
+                    padding: 3px 6px; background-color: rgba(50, 50, 50, 0.8);
+                    border-radius: 4px; margin: 1px;
+                    border: 1px solid rgba(255, 215, 0, 0.3);
+                """)
+            else:
+                # Standard metadata styling
+                label.setStyleSheet("""
+                    font-size: 11px; color: #ffffff; padding: 4px 6px;
+                    background-color: rgba(60, 60, 60, 0.9);
+                    border-radius: 4px; margin: 1px;
+                """)
+            
+            label.setWordWrap(True)
+            layout.addWidget(label)
+        
+        # Enhanced metadata sections (always visible)
+        if photo.has_enhanced_metadata():
+            layout.addSpacing(6)
+            
+            # Date comparison section
+            if photo.has_date_taken():
+                date_section = self._create_date_comparison_section(photo)
+                layout.addWidget(date_section)
+
+            # Location section (detailed view)
+            if photo.has_location():
+                location_section = self._create_location_section(photo)
+                layout.addWidget(location_section)
+
+            
+            # Caption section
+            if photo.has_caption():
+                caption_section = self._create_caption_section(photo)
+                layout.addWidget(caption_section)
+            
+            # Keywords section
+            if photo.has_keywords():
+                keywords_section = self._create_keywords_section(photo)
+                layout.addWidget(keywords_section)
+        
+        return widget
+    
+    def _create_date_comparison_section(self, photo: DuplicatePhoto) -> QWidget:
+        """Create date comparison section"""
+        container = QWidget()
+        layout = QVBoxLayout(container)
+        layout.setSpacing(3)
+        layout.setContentsMargins(0, 0, 0, 0)
+        
+        # Header
+        header = QLabel("📅 Photo Dates:")
+        header.setStyleSheet("""
+            font-size: 10px; font-weight: bold; color: #ffffff;
+            background-color: rgba(70, 70, 70, 0.8); padding: 3px 6px;
+            border-radius: 3px; margin-bottom: 2px;
+        """)
+        layout.addWidget(header)
+        
+        # Date info
+        date_widget = QFrame()
+        date_layout = QVBoxLayout(date_widget)
+        date_layout.setSpacing(2)
+        date_layout.setContentsMargins(6, 4, 6, 4)
+        
+        date_comp = photo.get_date_comparison()
+        
+        if date_comp['has_both_dates']:
+            taken_lbl = QLabel(f"📸 Taken: {date_comp['date_taken_formatted']}")
+            uploaded_lbl = QLabel(f"📤 Uploaded: {date_comp['date_uploaded_formatted']}")
+            diff_lbl = QLabel(f"⏱️ {date_comp['time_difference']}")
+            
+            for lbl in [taken_lbl, uploaded_lbl]:
+                lbl.setStyleSheet("""
+                    font-size: 9px; color: #ffffff; padding: 2px;
+                    background-color: rgba(60, 60, 60, 0.8); border-radius: 2px;
+                """)
+            
+            diff_color = self._get_date_status_color(date_comp['status'])
+            diff_lbl.setStyleSheet(f"""
+                font-size: 9px; color: #ffffff; font-weight: bold; padding: 2px 4px; 
+                background-color: {diff_color}; border-radius: 2px; margin: 1px;
+            """)
+            
+            date_layout.addWidget(taken_lbl)
+            date_layout.addWidget(uploaded_lbl)
+            date_layout.addWidget(diff_lbl)
+        else:
+            if date_comp['date_taken_formatted']:
+                lbl = QLabel(f"📸 Taken: {date_comp['date_taken_formatted']}")
+            else:
+                lbl = QLabel(f"📤 Uploaded: {date_comp['date_uploaded_formatted']}")
+            
+            lbl.setStyleSheet("""
+                font-size: 9px; color: #ffffff; padding: 2px;
+                background-color: rgba(60, 60, 60, 0.8); border-radius: 2px;
+            """)
+            date_layout.addWidget(lbl)
+        
+        date_widget.setStyleSheet("""
+            QFrame { 
+                background-color: rgba(45, 45, 45, 0.9); border: 1px solid #555555;
+                border-radius: 3px; border-left: 3px solid #87CEEB; margin: 1px;
+            }
+        """)
+        
+        layout.addWidget(date_widget)
+        return container
+    
+    def _create_caption_section(self, photo: DuplicatePhoto) -> QWidget:
+        """Create caption section"""
+        container = QWidget()
+        layout = QVBoxLayout(container)
+        layout.setSpacing(3)
+        layout.setContentsMargins(0, 0, 0, 0)
+        
+        # Header
+        header = QLabel("📝 Caption:")
+        header.setStyleSheet("""
+            font-size: 10px; font-weight: bold; color: #ffffff;
+            background-color: rgba(70, 70, 70, 0.8); padding: 3px 6px;
+            border-radius: 3px; margin-bottom: 2px;
+        """)
+        layout.addWidget(header)
+        
+        # Caption text
+        caption_lbl = QLabel(photo.display_caption(150))
+        caption_lbl.setWordWrap(True)
+        caption_lbl.setStyleSheet("""
+            font-size: 10px; color: #ffffff; padding: 4px;
+            background-color: rgba(45, 45, 45, 0.9); border: 1px solid #555555;
+            border-radius: 3px; border-left: 3px solid #87CEEB; 
+            line-height: 1.3; min-height: 20px; margin: 1px;
+        """)
+        layout.addWidget(caption_lbl)
+        
+        return container
+    
+    def _create_keywords_section(self, photo: DuplicatePhoto) -> QWidget:
+        """Create keywords section"""
+        container = QWidget()
+        layout = QVBoxLayout(container)
+        layout.setSpacing(3)
+        layout.setContentsMargins(0, 0, 0, 0)
+        
+        # Header
+        keyword_count = len(photo.get_keywords_list())
+        header = QLabel(f"🏷️ Keywords ({keyword_count}):")
+        header.setStyleSheet("""
+            font-size: 10px; font-weight: bold; color: #ffffff;
+            background-color: rgba(70, 70, 70, 0.8); padding: 3px 6px;
+            border-radius: 3px; margin-bottom: 2px;
+        """)
+        layout.addWidget(header)
+        
+        # Keywords container
+        kw_container = QFrame()
+        kw_layout = QVBoxLayout(kw_container)
+        kw_layout.setSpacing(3)
+        kw_layout.setContentsMargins(6, 3, 6, 3)
+        
+        keywords = photo.get_keywords_list()
+        for i in range(0, len(keywords), 3):
+            row_keywords = keywords[i:i+3]
+            row_widget = QWidget()
+            row_layout = QHBoxLayout(row_widget)
+            row_layout.setSpacing(4)
+            row_layout.setContentsMargins(0, 0, 0, 0)
+            
+            for keyword in row_keywords:
+                tag = QLabel(keyword)
+                tag.setStyleSheet("""
+                    font-size: 8px; color: #ffffff; background-color: #4a90e2;
+                    padding: 2px 6px; border-radius: 8px; font-weight: bold;
+                    border: 1px solid #357abd; min-height: 12px;
+                """)
+                tag.setAlignment(Qt.AlignmentFlag.AlignCenter)
+                row_layout.addWidget(tag)
+            
+            row_layout.addStretch()
+            kw_layout.addWidget(row_widget)
+        
+        kw_container.setStyleSheet("""
+            QFrame {
+                background-color: rgba(45, 45, 45, 0.9); border: 1px solid #555555;
+                border-radius: 3px; border-left: 3px solid #4a90e2; 
+                min-height: 25px; margin: 1px;
+            }
+        """)
+        
+        layout.addWidget(kw_container)
+        return container
+    
+    def _get_date_status_color(self, status: str) -> str:
+        """Get color for date status indication"""
+        color_map = {
+            'immediate': '#4CAF50',      # Green - likely original
+            'same_day': '#8BC34A',       # Light green - very recent
+            'recent': '#FFC107',         # Yellow - recent
+            'delayed': '#FF9800',        # Orange - delayed
+            'very_delayed': '#FF5722',   # Red-orange - very delayed
+            'archived': '#9E9E9E',       # Gray - archived later
+            'unknown': '#666666'         # Dark gray - unknown
+        }
+        return color_map.get(status, '#666666')
+    
+    def _create_quality_indicator(self, photo: DuplicatePhoto) -> str:
+        """Create a quality indicator string for the photo"""
+        score = photo.get_quality_score()
+    
+        if score >= 9:  # Increased threshold since GPS adds +1
+            return "⭐ Premium Quality (recommended)"
+        elif score >= 8:
+            return "⭐ High Quality (recommended)"
+        elif score >= 5:
+            return "⭐ Good Quality"
+        elif score >= 3:
+            return "⭐ Standard Quality"
+        elif score >= 1:
+            return "⭐ Basic Quality"
+        else:
+            return ""
+
     def _create_status_feedback(self) -> QLabel:
         """Create status feedback label"""
         status_feedback = QLabel("")
@@ -122,22 +523,22 @@ class DuplicateGroupWidget(QWidget):
         return status_feedback
     
     def _create_action_buttons(self) -> QHBoxLayout:
-        """Create the action buttons layout - UPDATED FOR WORKING MOVES"""
+        """Create the action buttons layout"""
         button_layout = QHBoxLayout()
         button_layout.setSpacing(15)
         
-        # Delete Selected button (permanent deletion)
-        delete_btn = QPushButton("🗑️ Delete Selected Duplicates")
+        # Delete Unselected button
+        delete_btn = QPushButton("🗑️ Delete Unselected Duplicates")
         delete_btn.clicked.connect(self.delete_selected_action)
         delete_btn.setToolTip("Permanently delete the photos that are NOT selected to keep")
         delete_btn.setMinimumHeight(45)
         delete_btn.setStyleSheet(self._get_delete_button_style())
         button_layout.addWidget(delete_btn)
         
-        # UPDATED: Move to Review Album button (now with WORKING moves!)
+        # Move to Review Album button
         move_btn = QPushButton("📦 Move to Review Album")
         move_btn.clicked.connect(self.move_selected_to_review_action)
-        move_btn.setToolTip("Move duplicates to review album (removes from source albums) - NOW WITH WORKING MOVEIMAGES!")
+        move_btn.setToolTip("Move unselected duplicates to review album (removes from source albums)")
         move_btn.setMinimumHeight(45)
         move_btn.setStyleSheet(self._get_move_button_style())
         button_layout.addWidget(move_btn)
@@ -153,97 +554,15 @@ class DuplicateGroupWidget(QWidget):
         button_layout.addStretch()
         return button_layout
     
-    def _create_photo_card(self, photo: DuplicatePhoto, index: int) -> QWidget:
-        """Create a card widget for a single photo"""
-        card = QWidget()
-        card.setFixedWidth(320)
-        card.setMinimumHeight(480)
-        card.setStyleSheet("""
-            QWidget {
-                background-color: #3c3c3c;
-                border-radius: 8px;
-                border: 2px solid #555555;
-                margin: 5px;
-            }
-        """)
-        
-        layout = QVBoxLayout(card)
-        layout.setSpacing(8)
-        layout.setContentsMargins(10, 10, 10, 10)
-        
-        # Radio button for selection
-        radio = QRadioButton(f"✓ Keep this copy")
-        radio.setChecked(photo.keep)
-        radio.toggled.connect(self._on_selection_changed)
-        radio.setStyleSheet("font-weight: bold; font-size: 12px; color: #4CAF50;")
-        self.button_group.addButton(radio, index)
-        self.radio_buttons.append(radio)
-        layout.addWidget(radio)
-        
-        # Photo preview
-        preview = PhotoPreviewWidget()
-        preview.setMinimumHeight(320)
-        preview.setMaximumHeight(350)
-        preview.display_photo(photo)
-        self.preview_widgets.append(preview)
-        layout.addWidget(preview)
-        
-        # Compact metadata
-        metadata_widget = self._create_compact_metadata(photo)
-        layout.addWidget(metadata_widget)
-        
-        layout.addStretch()
-        return card
-    
-    def _create_compact_metadata(self, photo: DuplicatePhoto) -> QWidget:
-        """Create compact metadata display below photo"""
-        widget = QWidget()
-        layout = QVBoxLayout(widget)
-        layout.setSpacing(3)
-        layout.setContentsMargins(5, 5, 5, 5)
-        
-        # Format date
-        try:
-            if photo.date_uploaded and 'T' in photo.date_uploaded:
-                from datetime import datetime
-                dt = datetime.fromisoformat(photo.date_uploaded.replace('Z', '+00:00'))
-                short_date = dt.strftime("%m/%d/%y")
-            else:
-                short_date = "Unknown"
-        except:
-            short_date = "Unknown"
-        
-        # Compact info lines
-        info_lines = [
-            f"📁 {photo.short_album_name()}",
-            f"📄 {photo.short_filename()}",
-            f"📊 {photo.size_mb():.1f} MB  📅 {short_date}"
-        ]
-        
-        for line in info_lines:
-            label = QLabel(line)
-            label.setStyleSheet("""
-                font-size: 11px; 
-                color: #ffffff; 
-                padding: 4px 6px;
-                background-color: rgba(60, 60, 60, 0.9);
-                border-radius: 4px;
-                margin: 1px;
-            """)
-            label.setWordWrap(True)
-            layout.addWidget(label)
-        
-        return widget
-    
     def _on_selection_changed(self):
         """Handle radio button selection change"""
         for i, radio in enumerate(self.radio_buttons):
             self.duplicates[i].keep = radio.isChecked()
         self.selection_changed.emit()
     
-    # Action Methods - UPDATED FOR WORKING MOVEIMAGES
+    # Action Methods
     def move_selected_to_review_action(self):
-        """Move duplicates to review album using WORKING moveimages - SmugDups v5.0"""
+        """Move duplicates to review album using working moveimages"""
         try:
             import credentials
             from operations import EnhancedPhotoCopyMoveOperations
@@ -258,12 +577,10 @@ class DuplicateGroupWidget(QWidget):
             selected_count = sum(1 for photo in self.duplicates if photo.keep)
             
             if selected_count == 0:
-                # No photo selected to keep - move all to review for manual decision
                 photos_to_move = self.duplicates.copy()
                 action_description = f"No photo selected to keep. Moving all {len(photos_to_move)} photos to review album."
                 print(f"📦 {action_description}")
             elif selected_count == 1:
-                # One photo selected to keep - move only the others to review  
                 photos_to_move = [photo for photo in self.duplicates if not photo.keep]
                 kept_photo = [photo for photo in self.duplicates if photo.keep][0]
                 action_description = f"Keeping {kept_photo.filename}. Moving {len(photos_to_move)} duplicate(s) to review album."
@@ -272,7 +589,6 @@ class DuplicateGroupWidget(QWidget):
                 for photo in photos_to_move:
                     print(f"   📦 MOVING: {photo.filename} from {photo.album_name}")
             else:
-                # Multiple photos selected - this shouldn't happen with radio buttons, but handle it
                 photos_to_move = self.duplicates.copy()
                 action_description = f"Multiple photos selected (unusual). Moving all {len(photos_to_move)} photos to review album."
                 print(f"⚠️  {action_description}")
@@ -281,25 +597,23 @@ class DuplicateGroupWidget(QWidget):
                 self.show_feedback("✅ No photos need to be moved - all duplicates are selected to keep", True)
                 return
             
-            # Initialize enhanced move operations with WORKING moveimages
+            # Initialize enhanced move operations
             move_ops = EnhancedPhotoCopyMoveOperations(main_window.api)
             
             # Show processing feedback
-            self.show_feedback(f"🔄 Moving {len(photos_to_move)} photo(s) with WORKING moveimages...", None)
+            self.show_feedback(f"🔄 Moving {len(photos_to_move)} photo(s) with working moveimages...", None)
             
-            # Process using WORKING moveimages functionality
+            # Process using working moveimages functionality
             results = move_ops.process_duplicates_for_review([photos_to_move], credentials.USER_NAME)
             
             if not results['success']:
                 if results.get('manual_creation_needed'):
-                    # Show manual creation instructions
                     instructions = results.get('instructions', 'Manual album creation required')
                     album_name = results.get('suggested_album_name', 'SmugDups_Review')
                     
                     feedback_msg = f"📦 Create album manually: {album_name}"
                     self.show_feedback(feedback_msg, False)
                     
-                    # Print detailed instructions to console
                     print(f"\n💡 MANUAL ALBUM CREATION NEEDED:")
                     print(instructions)
                     
@@ -309,7 +623,7 @@ class DuplicateGroupWidget(QWidget):
                 
                 return
             
-            # Show results for WORKING moveimages
+            # Show results
             successful = results.get('successful_moves', 0)
             failed = results.get('failed_moves', 0)
             album_info = results['review_album']
@@ -324,12 +638,10 @@ class DuplicateGroupWidget(QWidget):
                 
                 self.show_feedback(success_msg, True)
                 
-                # Show review album URL if available
                 if album_info.get('web_url'):
                     print(f"🌐 Review album: {album_info['web_url']}")
                     
             else:
-                # All moves failed - provide helpful guidance
                 if failed > 0:
                     failure_msg = f"❌ Failed to move {failed} photos. Check console for details."
                     self.show_feedback(failure_msg, False)
@@ -341,11 +653,9 @@ class DuplicateGroupWidget(QWidget):
                         for photo in photos_to_move:
                             print(f"      - {photo.filename} from {photo.album_name}")
                 else:
-                    # This shouldn't happen, but handle it
                     manual_msg = f"📦 Photos need manual moving to {album_name}"
                     self.show_feedback(manual_msg, None)
             
-            # Mark as processed if moves were successful
             if successful > 0:
                 self.mark_as_processed()
                 
@@ -355,13 +665,6 @@ class DuplicateGroupWidget(QWidget):
             import traceback
             traceback.print_exc()
     
-    # Keep the old method name for backwards compatibility during transition
-    def copy_selected_to_review_action(self):
-        """Backwards compatibility - redirects to move action"""
-        print("⚠️  WARNING: copy_selected_to_review_action is deprecated!")
-        print("   🎯 Now using move_selected_to_review_action for WORKING moves")
-        self.move_selected_to_review_action()
-            
     def delete_selected_action(self):
         """Handle the delete selected action"""
         selected_count = sum(1 for photo in self.duplicates if photo.keep)
@@ -374,7 +677,6 @@ class DuplicateGroupWidget(QWidget):
             self.show_feedback("❌ Error: Multiple photos selected to keep!", False)
             return
         
-        # Show what will be deleted
         photos_to_delete = [photo for photo in self.duplicates if not photo.keep]
         photos_to_keep = [photo for photo in self.duplicates if photo.keep]
         
@@ -387,21 +689,16 @@ class DuplicateGroupWidget(QWidget):
         for photo in photos_to_delete:
             print(f"  🗑️  DELETE: {photo.filename} from {photo.album_name} (ID: {photo.image_id})")
         
-        # Show processing feedback
         self.show_feedback(f"🔄 Deleting {to_delete_count} duplicate photo(s)...", None)
         
-        # Perform actual deletion using the fixed API
         try:
-            # Get API reference from main window
             main_window = self.window()
             api = main_window.api
             
-            # Delete each photo that's not marked to keep
             deletion_results = []
             for photo in photos_to_delete:
                 print(f"\n🔄 Deleting {photo.filename} (ID: {photo.image_id})...")
                 
-                # Try deletion with retry for OAuth nonce conflicts
                 success = False
                 error_message = ""
                 max_retries = 3
@@ -410,7 +707,7 @@ class DuplicateGroupWidget(QWidget):
                     if attempt > 0:
                         print(f"Retry attempt {attempt + 1}/{max_retries}")
                         import time
-                        time.sleep(2)  # Wait before retry
+                        time.sleep(2)
                     
                     success, error_message = api.delete_image_with_details(photo.image_id)
                     
@@ -430,7 +727,6 @@ class DuplicateGroupWidget(QWidget):
                     print(f"❌ Failed to delete {photo.filename} after {max_retries} attempts: {error_message}")
                     deletion_results.append((photo, False, error_message))
             
-            # Report final results
             successful_deletions = [r for r in deletion_results if r[1]]
             failed_deletions = [r for r in deletion_results if not r[1]]
             
@@ -438,7 +734,6 @@ class DuplicateGroupWidget(QWidget):
             print(f"✅ Successfully deleted: {len(successful_deletions)} photos")
             print(f"❌ Failed to delete: {len(failed_deletions)} photos")
             
-            # Show GUI feedback
             if successful_deletions:
                 success_msg = f"✅ Successfully deleted {len(successful_deletions)} duplicate photo(s)!"
                 self.show_feedback(success_msg, True)
@@ -454,12 +749,10 @@ class DuplicateGroupWidget(QWidget):
     
     def skip_group_action(self):
         """Mark this duplicate group to be skipped"""
-        # Uncheck all radio buttons to indicate no action will be taken
         for i, radio in enumerate(self.radio_buttons):
             radio.setChecked(False)
             self.duplicates[i].keep = False
         
-        # Update the header to indicate this group is being skipped
         header_widget = self.findChild(QLabel)
         if header_widget and "Duplicate Group" in header_widget.text():
             original_text = header_widget.text()
@@ -469,9 +762,8 @@ class DuplicateGroupWidget(QWidget):
                 'color: #888888'
             ))
         
-        # Disable all action buttons in this group
         for button in self.findChildren(QPushButton):
-            if "Skip" not in button.text():  # Don't disable the skip button itself
+            if "Skip" not in button.text():
                 button.setEnabled(False)
         
         self.selection_changed.emit()
@@ -498,7 +790,6 @@ class DuplicateGroupWidget(QWidget):
                     color: #2e7d32; border: 1px solid #4caf50;
                 }
             """
-            # Disable buttons after success
             for button in self.findChildren(QPushButton):
                 button.setEnabled(False)
         else:  # Error
@@ -514,7 +805,6 @@ class DuplicateGroupWidget(QWidget):
     
     def mark_as_processed(self):
         """Mark this group as processed"""
-        # Update header to show it's been processed
         header_widget = self.findChild(QLabel)
         if header_widget and "Duplicate Group" in header_widget.text():
             original_text = header_widget.text()
@@ -524,7 +814,6 @@ class DuplicateGroupWidget(QWidget):
                 'color: #4CAF50'
             ))
         
-        # Disable all buttons in this group
         for button in self.findChildren(QPushButton):
             button.setEnabled(False)
     
@@ -539,7 +828,7 @@ class DuplicateGroupWidget(QWidget):
             QPushButton:pressed { background-color: #c62828; }
         """
     
-    def _get_move_button_style(self) -> str:  # RENAMED from _get_copy_button_style
+    def _get_move_button_style(self) -> str:
         return """
             QPushButton {
                 background-color: #4CAF50; border: 1px solid #45a049;
@@ -558,3 +847,58 @@ class DuplicateGroupWidget(QWidget):
             QPushButton:hover { background-color: #7c7c7c; }
             QPushButton:pressed { background-color: #8c8c8c; }
         """
+
+    def _create_location_section(self, photo: DuplicatePhoto) -> QWidget:
+        """Create location/GPS section"""
+        container = QWidget()
+        layout = QVBoxLayout(container)
+        layout.setSpacing(3)
+        layout.setContentsMargins(0, 0, 0, 0)
+
+        # Header
+        header = QLabel("📍 Location:")
+        header.setStyleSheet("""
+        font-size: 10px; font-weight: bold; color: #ffffff;
+        background-color: rgba(70, 70, 70, 0.8); padding: 3px 6px;
+        border-radius: 3px; margin-bottom: 2px;
+        """)
+        layout.addWidget(header)
+
+        # Location details
+        location_widget = QFrame()
+        location_layout = QVBoxLayout(location_widget)
+        location_layout.setSpacing(2)
+        location_layout.setContentsMargins(6, 4, 6, 4)
+
+        # GPS coordinates
+        coords_lbl = QLabel(f"📐 {photo.get_location_short()}")
+        coords_lbl.setStyleSheet("""
+        font-size: 9px; color: #ffffff; padding: 2px;
+        background-color: rgba(60, 60, 60, 0.8); border-radius: 2px;
+        font-family: monospace;
+        """)
+        location_layout.addWidget(coords_lbl)
+
+        # Altitude if available
+        if photo.altitude is not None:
+            if photo.altitude >= 0:
+                alt_text = f"⛰️ {photo.altitude:.0f}m above sea level"
+        else:
+            alt_text = f"🌊 {abs(photo.altitude):.0f}m below sea level"
+
+        alt_lbl = QLabel(alt_text)
+        alt_lbl.setStyleSheet("""
+            font-size: 9px; color: #ffffff; padding: 2px;
+            background-color: rgba(60, 60, 60, 0.8); border-radius: 2px;
+        """)
+        location_layout.addWidget(alt_lbl)
+
+        location_widget.setStyleSheet("""
+        QFrame {
+            background-color: rgba(45, 45, 45, 0.9); border: 1px solid #555555;
+            border-radius: 3px; border-left: 3px solid #4CAF50; margin: 1px;
+        }
+        """)
+
+        layout.addWidget(location_widget)
+        return container

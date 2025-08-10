@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-SmugDups - SmugMug Duplicate Photo Manager v5.0
+SmugDups - SmugMug Duplicate Photo Manager v5.1
 File: main.py
-Entry point for the SmugDups application - NOW WITH WORKING MOVEIMAGES!
+Entry point for the SmugDups application - NOW WITH GPS COORDINATE SUPPORT!
 """
 
 import sys
@@ -21,7 +21,7 @@ def main():
     
     # Set application properties
     app.setApplicationName("SmugDups")
-    app.setApplicationVersion("5.0")
+    app.setApplicationVersion("5.1")
     app.setOrganizationName("SmugDups")
     
     # Create and show main window
@@ -31,6 +31,7 @@ def main():
     sys.exit(app.exec())
 
 if __name__ == "__main__":
-    print("🚀 Starting SmugDups v5.0 - SmugMug Duplicate Photo Manager")
+    print("🚀 Starting SmugDups v5.1 - SmugMug Duplicate Photo Manager")
     print("✅ Now with WORKING moveimages functionality!")
+    print("🗺️ NEW: GPS coordinate support for location-aware duplicate management!")
     main()

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 SmugMug Album Operations - Album creation and management functionality v5.0
-File: smugmug_album_operations.py
+File: operations/smugmug_album_operations.py
 Contains the album creation and management methods separated from image copying
 """
 

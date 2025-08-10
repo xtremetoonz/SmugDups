@@ -1,16 +1,16 @@
-# SmugDups v5.0 - SmugMug Duplicate Photo Manager
+# SmugDups v5.1 - SmugMug Duplicate Photo Manager
 
-**Advanced duplicate photo detection and management for SmugMug accounts with working moveimages functionality.**
+**Advanced duplicate photo detection and management for SmugMug accounts with working moveimages functionality and GPS coordinate support.**
 
-![SmugDups v5.0](https://img.shields.io/badge/Version-5.0-brightgreen) ![Python](https://img.shields.io/badge/Python-3.9+-blue) ![PyQt6](https://img.shields.io/badge/GUI-PyQt6-orange) ![SmugMug API](https://img.shields.io/badge/API-SmugMug%20v2-red)
+![SmugDups v5.1](https://img.shields.io/badge/Version-5.1-brightgreen) ![Python](https://img.shields.io/badge/Python-3.9+-blue) ![PyQt6](https://img.shields.io/badge/GUI-PyQt6-orange) ![SmugMug API](https://img.shields.io/badge/API-SmugMug%20v2-red)
 
-## 🎉 What's New in v5.0
+## 🎉 What's New in v5.1
 
-- **✅ WORKING moveimages functionality** - True moves with no manual cleanup needed!
-- **✅ SmugMug API v2 compliant** - Uses proper parameters discovered through support collaboration
-- **✅ Automatic verification** - Confirms moves actually worked
-- **✅ Enhanced error handling** - Robust OAuth and redirect management
-- **🚀 Original idea from MugMatch updated and refactored to SmugDups** - New name, same powerful functionality!
+- **🗺️ GPS Coordinate Support** - Display latitude, longitude, and altitude when available
+- **📍 Enhanced Quality Scoring** - GPS-tagged photos get higher quality scores  
+- **🌍 Location-Based Decision Making** - See which duplicates have geographic data
+- **📊 Geographic Statistics** - Group headers show GPS data availability
+- **✅ All v5.0 Features** - Working moveimages, automatic verification, enhanced error handling
 
 ## 🚀 Features
 
@@ -20,12 +20,19 @@
 - **Automatic review album creation** with date-stamped naming
 - **No manual cleanup required** - fully automated workflow
 
+### Geographic Enhancement (v5.1)
+- **GPS coordinate display** - latitude, longitude, altitude when available
+- **Location-aware quality scoring** - GPS data contributes to duplicate selection
+- **Smart location display** - compact coordinates in basic view, detailed in expanded
+- **Distance calculations** - calculate distances between geotagged duplicates
+
 ### User Interface
 - **Modern PyQt6 GUI** with dark theme
 - **Photo preview thumbnails** with metadata display
 - **Batch album selection** with sorting options
 - **Real-time progress tracking** during scans
 - **Intuitive duplicate management** with radio button selection
+- **Geographic data integration** - seamless GPS coordinate display
 
 ### Technical Excellence
 - **OAuth1 authentication** with proper redirect handling
@@ -48,12 +55,18 @@
    cd SmugDups
    ```
 
-2. **Install dependencies:**
+2. **Create virtual environment (recommended):**
+   ```bash
+   python3 -m venv smugdups_env
+   source smugdups_env/bin/activate  # On Windows: smugdups_env\Scripts\activate
+   ```
+
+3. **Install dependencies:**
    ```bash
    pip install -r requirements.txt
    ```
 
-3. **Set up credentials:**
+4. **Set up credentials:**
    ```bash
    cp credentialsTemplate.py credentials.py
    # Edit credentials.py with your SmugMug API details
@@ -81,6 +94,8 @@
 
 1. **Launch SmugDups:**
    ```bash
+   # If using virtual environment
+   source smugdups_env/bin/activate
    python main.py
    ```
 
@@ -95,21 +110,41 @@
 - **Batch selection** with "All" and "None" buttons
 - **Skip duplicate groups** you want to leave unchanged
 - **Permanent deletion** option for immediate removal
+- **GPS coordinate viewing** for location-tagged photos
+
+## 🗺️ Geographic Features (New in v5.1)
+
+### GPS Data Display
+- **Basic view**: Compact coordinates like `📍 40.7589,-73.9851`
+- **Detailed view**: Full coordinates with altitude: `📐 40.758896°N, 73.985130°W ⛰️ 15m above sea level`
+- **Group statistics**: Headers show `X with GPS` for duplicate groups
+
+### Enhanced Quality Scoring
+- Photos with GPS coordinates receive +1 quality score
+- Helps identify original photos vs processed copies
+- Especially useful for travel photography
+
+### Smart Selection Logic
+SmugDups now considers GPS data when recommending which duplicate to keep:
+- Original photos often retain GPS data better than processed copies
+- Location data adds context for decision making
+- Distance calculations between duplicate locations
 
 ## 📦 Project Structure
 
 ```
 SmugDups/
 ├── main.py                          # Entry point
-├── smugmug_api.py                   # SmugMug API wrapper with OAuth
+├── smugmug_api.py                   # SmugMug API wrapper with OAuth + GPS
 ├── credentials.py                   # Your API keys (create from template)
 ├── requirements.txt                 # Python dependencies
+├── smugdups_env/                    # Virtual environment (created during setup)
 ├── core/
-│   ├── models.py                    # DuplicatePhoto data model
+│   ├── models.py                    # DuplicatePhoto data model with GPS
 │   └── duplicate_finder.py          # Background duplicate detection
 ├── gui/
 │   ├── main_window.py              # Main application window
-│   ├── duplicate_widget.py         # Duplicate group management UI
+│   ├── duplicate_widget.py         # Duplicate group management UI with GPS
 │   └── photo_preview.py            # Photo thumbnail display
 └── operations/
     ├── enhanced_photo_copy_move.py  # Main orchestrator with working moves
@@ -134,11 +169,12 @@ USER_NAME = "your_smugmug_username"
 - **Duplicate detection:** MD5 hash comparison
 - **Move verification:** Automatic confirmation
 - **Rate limiting:** 1 second between operations
+- **GPS data:** Automatic collection when available
 
 ## 🔧 Technical Details
 
 ### Working MoveImages Implementation
-SmugDups v5.0 uses the correct SmugMug API v2 moveimages format:
+SmugDups v5.1 uses the correct SmugMug API v2 moveimages format:
 
 ```python
 # Correct moveimages format (discovered through SmugMug support):
@@ -148,17 +184,20 @@ data = {
 }
 ```
 
+### GPS Data Collection
+SmugDups automatically requests GPS coordinates:
+
+```python
+# Enhanced API filter with GPS coordinates
+'_filter': 'ImageKey,FileName,ArchivedMD5,ArchivedSize,Date,WebUri,ThumbnailUrl,Title,Caption,Keywords,DateTimeOriginal,Latitude,Longitude,Altitude'
+```
+
 ### Key Technical Insights
 - **Parameter name:** `MoveUris` (not `ImageUris`)
 - **URI format:** AlbumImage URI format (`/api/v2/album/SOURCE/image/ID`)
 - **Endpoint:** Use target album's moveimages endpoint
 - **Verification:** Check source no longer has image and target does
-
-### OAuth and Redirects
-SmugDups handles SmugMug's OAuth redirects properly:
-- Disables automatic redirects (`allow_redirects=False`)
-- Creates fresh OAuth tokens for redirect requests
-- Follows SmugMug engineering guidance
+- **GPS handling:** Graceful fallback when coordinates unavailable
 
 ## 🐛 Troubleshooting
 
@@ -177,6 +216,11 @@ SmugDups handles SmugMug's OAuth redirects properly:
 - Check that target album allows image additions
 - Review console output for specific error messages
 
+**Virtual Environment Issues**
+- Ensure virtual environment is activated before running
+- Reinstall packages if switching Python versions
+- Use `which python` to verify correct Python installation
+
 ### Debug Mode
 Enable detailed logging by checking console output during operations.
 
@@ -186,6 +230,7 @@ Enable detailed logging by checking console output during operations.
 - **Memory usage:** Minimal (thumbnails cached locally)
 - **API compliance:** Rate limited to respect SmugMug guidelines
 - **Move verification:** Automatic confirmation of successful operations
+- **GPS processing:** No performance impact when coordinates unavailable
 
 ## 🤝 Contributing
 
@@ -198,7 +243,7 @@ Enable detailed logging by checking console output during operations.
 ### Development Guidelines
 - Follow existing code structure
 - Add comprehensive error handling
-- Test with real SmugMug data
+- Test with real SmugMug data including GPS-tagged photos
 - Update documentation for new features
 
 ## 📝 License
@@ -210,7 +255,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - **SmugMug Support Team** for helping solve the moveimages parameter format
 - **SmugMug API Team** for maintaining comprehensive API documentation
 - **PyQt6 Community** for excellent GUI framework
-- **Original SmugDups inspiration** that led to this enhanced version
+- **GPS/Photography Community** for feedback on geographic feature needs
 
 ## 📞 Support
 
@@ -221,19 +266,20 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ## 🗺️ Roadmap
 
 ### Planned Features
-- **Batch operations** for large duplicate sets
-- **Advanced filtering** by file type, size, date
-- **Duplicate prevention** during uploads
-- **Integration** with other photo services
-- **Automated scheduling** for regular scans
+- **Map integration** for visual location display
+- **Location-based clustering** of duplicate groups
+- **Batch operations** for geographic regions
+- **GPX export** for location data
+- **Advanced filtering** by GPS availability and location proximity
 
 ### Version History
+- **v5.1:** GPS coordinate support, enhanced quality scoring
 - **v5.0:** Working moveimages, rebranded to SmugDups
 - **v2.x:** Collectimages approach
 - **v1.x:** Initial duplicate detection implementation
 
 ---
 
-**SmugDups v5.0** - Making SmugMug duplicate management simple and effective! 🎉
+**SmugDups v5.1** - Making SmugMug duplicate management simple, effective, and location-aware! 🎉🗺️
 
-*"Finally, true moveimages functionality that actually works!"*
+*"Finally, true moveimages functionality that actually works - now with GPS support!"*
