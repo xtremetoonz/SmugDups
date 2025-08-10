@@ -1,7 +1,7 @@
 """
-Main application window for SmugDups v5.0
+Main application window for SmugDups v5.1
 File: gui/main_window.py
-UPDATED: Rebranded from SmugDups to SmugDups with working moveimages
+UPDATED: v5.1 with GPS coordinate support and enhanced UI messaging
 """
 
 from typing import List
@@ -38,7 +38,7 @@ class AlbumLoader(QThread):
             self.error_occurred.emit(str(e))
 
 class SmugDupsMainWindow(QMainWindow):
-    """Main application window for SmugDups"""
+    """Main application window for SmugDups v5.1 with GPS support"""
     
     def __init__(self):
         super().__init__()
@@ -50,7 +50,7 @@ class SmugDupsMainWindow(QMainWindow):
         
     def _setup_ui(self):
         """Set up the user interface"""
-        self.setWindowTitle("SmugDups - SmugMug Duplicate Photo Manager v5.0")
+        self.setWindowTitle("SmugDups - SmugMug Duplicate Photo Manager v5.1")
         self.setGeometry(100, 100, 1200, 800)
         
         # Apply dark theme
@@ -81,7 +81,7 @@ class SmugDupsMainWindow(QMainWindow):
         # Status bar
         self.status_bar = QStatusBar()
         self.setStatusBar(self.status_bar)
-        self.status_bar.showMessage("SmugDups v5.0 Ready - Now with working moveimages!")
+        self.status_bar.showMessage("SmugDups v5.1 Ready - Now with GPS coordinate support!")
     
     def _apply_dark_theme(self):
         """Apply dark theme styling"""
@@ -299,7 +299,7 @@ class SmugDupsMainWindow(QMainWindow):
         layout = QVBoxLayout(widget)
         layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
         
-        welcome_label = QLabel("🏠 Welcome to SmugDups v5.0")
+        welcome_label = QLabel("🏠 Welcome to SmugDups v5.1")
         welcome_label.setStyleSheet("font-size: 24px; font-weight: bold; margin: 20px;")
         welcome_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(welcome_label)
@@ -312,12 +312,19 @@ class SmugDupsMainWindow(QMainWindow):
 3. Click "🔍 Scan for Duplicates" to find duplicate photos
 4. Review and manage duplicates when found
 
-🎉 NEW in v5.0: WORKING moveimages functionality!
-   ✅ True moves - duplicates are removed from source albums
+🎉 NEW in v5.1: GPS Coordinate Support!
+   🗺️ Displays latitude, longitude, and altitude when available
+   📍 Location-aware quality scoring for better duplicate selection
+   🌍 Enhanced metadata with geographic context
+   📊 Group statistics show GPS data availability
+
+✅ All v5.0 Features Preserved:
+   ✅ WORKING moveimages functionality - true moves!
    ✅ No manual cleanup needed - fully automated!
    ✅ SmugMug API v2 compliant with proper parameters
 
 🔍 Tip: Start with smaller albums first to test the process!
+Perfect for travel photographers who geotag their work!
         """)
         instructions.setStyleSheet("font-size: 14px; line-height: 1.5; color: #cccccc; max-width: 500px;")
         instructions.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -350,28 +357,28 @@ class SmugDupsMainWindow(QMainWindow):
             print("Testing SmugMug API connection...")
             user_info = self.api.get_user_info(credentials.USER_NAME)
             if user_info:
-                self.status_bar.showMessage(f"SmugDups v5.0 - Connected as {user_info.get('Name', credentials.USER_NAME)}")
+                self.status_bar.showMessage(f"SmugDups v5.1 - Connected as {user_info.get('Name', credentials.USER_NAME)} (GPS support enabled)")
                 print(f"Successfully connected to SmugMug as: {user_info.get('Name', credentials.USER_NAME)}")
             else:
-                self.status_bar.showMessage("SmugDups v5.0 - API connection test failed")
+                self.status_bar.showMessage("SmugDups v5.1 - API connection test failed")
                 print("API connection test failed")
                 
         except ImportError as e:
-            self.status_bar.showMessage("SmugDups v5.0 - credentials.py file not found")
+            self.status_bar.showMessage("SmugDups v5.1 - credentials.py file not found")
             print(f"Could not import credentials.py: {e}")
             self.api = None
         except Exception as e:
-            self.status_bar.showMessage(f"SmugDups v5.0 - Failed to load credentials: {e}")
+            self.status_bar.showMessage(f"SmugDups v5.1 - Failed to load credentials: {e}")
             print(f"Credential loading error: {e}")
             self.api = None
 
     def _load_albums(self):
         """Load albums from SmugMug"""
         if not self.api:
-            self.status_bar.showMessage("SmugDups v5.0 - No API connection - please check credentials")
+            self.status_bar.showMessage("SmugDups v5.1 - No API connection - please check credentials")
             return
         
-        self.status_bar.showMessage("SmugDups v5.0 - Loading albums...")
+        self.status_bar.showMessage("SmugDups v5.1 - Loading albums...")
         self.refresh_button.setEnabled(False)
         self.stats_label.setText("Loading albums...")
         
@@ -401,7 +408,7 @@ class SmugDupsMainWindow(QMainWindow):
         self._populate_albums_list()
         self.refresh_button.setEnabled(True)
         self.scan_button.setEnabled(True)
-        self.status_bar.showMessage(f"SmugDups v5.0 - Loaded {len(albums)} albums")
+        self.status_bar.showMessage(f"SmugDups v5.1 - Loaded {len(albums)} albums (GPS support ready)")
         self.stats_label.setText(f"{len(albums)} albums loaded")
         
         print(f"Successfully loaded {len(albums)} albums")
@@ -409,7 +416,7 @@ class SmugDupsMainWindow(QMainWindow):
     def _on_albums_error(self, error_message):
         """Handle album loading errors"""
         self.refresh_button.setEnabled(True)
-        self.status_bar.showMessage(f"SmugDups v5.0 - Failed to load albums: {error_message}")
+        self.status_bar.showMessage(f"SmugDups v5.1 - Failed to load albums: {error_message}")
         self.stats_label.setText("Album loading failed")
         print(f"Album loading error: {error_message}")
     
@@ -533,10 +540,10 @@ class SmugDupsMainWindow(QMainWindow):
         selected_albums = self._get_selected_albums()
         
         if not selected_albums:
-            self.status_bar.showMessage("SmugDups v5.0 - Please select at least one album to scan")
+            self.status_bar.showMessage("SmugDups v5.1 - Please select at least one album to scan")
             return
         
-        print(f"Starting duplicate scan of {len(selected_albums)} selected albums")
+        print(f"Starting duplicate scan of {len(selected_albums)} selected albums with GPS support")
         
         self.progress_bar.setVisible(True)
         self.scan_button.setEnabled(False)
@@ -552,7 +559,7 @@ class SmugDupsMainWindow(QMainWindow):
     def _update_progress(self, value: int, message: str):
         """Update progress bar and status"""
         self.progress_bar.setValue(value)
-        self.status_bar.showMessage(f"SmugDups v5.0 - {message}")
+        self.status_bar.showMessage(f"SmugDups v5.1 - {message}")
     
     def _display_duplicates(self, duplicate_groups: List[List[DuplicatePhoto]]):
         """Display found duplicate groups"""
@@ -566,10 +573,14 @@ class SmugDupsMainWindow(QMainWindow):
         # Switch to results view
         self.content_stack.setCurrentIndex(1)
         
-        # Update statistics
+        # Update statistics with GPS info
         if duplicate_groups:
             total_duplicates = sum(len(group) - 1 for group in duplicate_groups)
-            self.stats_label.setText(f"{len(duplicate_groups)} groups, {total_duplicates} duplicates found")
+            total_with_gps = sum(1 for group in duplicate_groups for photo in group if photo.has_location())
+            if total_with_gps > 0:
+                self.stats_label.setText(f"{len(duplicate_groups)} groups, {total_duplicates} duplicates found ({total_with_gps} with GPS)")
+            else:
+                self.stats_label.setText(f"{len(duplicate_groups)} groups, {total_duplicates} duplicates found")
         else:
             self.stats_label.setText("No duplicates found")
     
@@ -596,12 +607,15 @@ class SmugDupsMainWindow(QMainWindow):
         container = QWidget()
         container_layout = QVBoxLayout(container)
         
-        # Add header with summary
+        # Add header with summary including GPS stats
         total_duplicates = sum(len(group) - 1 for group in duplicate_groups)
         total_waste = sum(sum(photo.size for photo in group[1:]) for group in duplicate_groups)
         waste_mb = total_waste / (1024 * 1024)
+        total_with_gps = sum(1 for group in duplicate_groups for photo in group if photo.has_location())
         
-        header = QLabel(f"🔍 Found {len(duplicate_groups)} duplicate groups ({total_duplicates} duplicates wasting {waste_mb:.1f} MB)")
+        gps_text = f" • {total_with_gps} photos with GPS data" if total_with_gps > 0 else ""
+        
+        header = QLabel(f"🔍 Found {len(duplicate_groups)} duplicate groups ({total_duplicates} duplicates wasting {waste_mb:.1f} MB{gps_text})")
         header.setStyleSheet("font-size: 18px; font-weight: bold; color: #ff6b6b; margin: 10px; padding: 10px; background-color: #3c3c3c; border-radius: 5px;")
         container_layout.addWidget(header)
         
@@ -611,7 +625,7 @@ class SmugDupsMainWindow(QMainWindow):
         container_layout.addWidget(instruction)
         
         # Add feature highlight
-        feature_highlight = QLabel("🎉 SmugDups v5.0: Now with WORKING moveimages - True moves with no manual cleanup needed!")
+        feature_highlight = QLabel("🎉 SmugDups v5.1: GPS coordinate support + working moveimages - True moves with no manual cleanup needed!")
         feature_highlight.setStyleSheet("font-size: 13px; color: #4CAF50; margin: 5px 10px; padding: 6px; background-color: #1b5e20; border-radius: 3px; border: 1px solid #4CAF50;")
         container_layout.addWidget(feature_highlight)
         
@@ -641,42 +655,20 @@ class SmugDupsMainWindow(QMainWindow):
         self.progress_bar.setVisible(False)
         self.scan_button.setEnabled(True)
         self.refresh_button.setEnabled(True)
-        self.status_bar.showMessage("SmugDups v5.0 - Scan completed")
+        self.status_bar.showMessage("SmugDups v5.1 - Scan completed")
     
     def _handle_error(self, error_message: str):
         """Handle errors during scanning"""
         self.progress_bar.setVisible(False)
         self.scan_button.setEnabled(True)
-        self.status_bar.showMessage(f"SmugDups v5.0 - Error: {error_message}")
+        self.status_bar.showMessage(f"SmugDups v5.1 - Error: {error_message}")
         print(f"Scan error: {error_message}")
 
     def _show_about(self):
         """Show about dialog"""
         about_text = """
-<h2>SmugDups v5.0</h2>
-<p><b>SmugMug Duplicate Photo Manager</b></p>
-<p>Advanced duplicate photo detection and management for SmugMug accounts with working moveimages functionality.</p>
-
-<h3>New in Version 5.0:</h3>
-<ul>
-<li>🎉 WORKING moveimages functionality</li>
-<li>✅ True moves - duplicates removed from source albums</li>
-<li>✅ No manual cleanup needed - fully automated</li>
-<li>✅ SmugMug API v2 compliant with proper parameters</li>
-<li>🔄 Enhanced error handling and verification</li>
-<li>🚀 Rebranded from SmugDups to SmugDups</li>
-</ul>
-
-<h3>Features:</h3>
-<ul>
-<li>MD5-based duplicate detection across albums</li>
-<li>PyQt6 modern GUI interface</li>
-<li>Automatic review album creation</li>
-<li>OAuth1 authentication with redirect handling</li>
-<li>Comprehensive duplicate management workflow</li>
-</ul>
-
-<p><i>Version 5.0 - 2025</i></p>
+<h2>SmugDups v5.1</h2>
+        <p><i>Version 5.1 - 2025</i></p>
         """
         
         msg = QMessageBox()
@@ -719,4 +711,34 @@ class SmugDupsMainWindow(QMainWindow):
             else:
                 event.ignore()
         else:
-            event.accept()
+            event.accept()<b>SmugMug Duplicate Photo Manager</b></p>
+<p>Advanced duplicate photo detection and management for SmugMug accounts with working moveimages functionality and GPS coordinate support.</p>
+
+<h3>New in Version 5.1:</h3>
+<ul>
+<li>🗺️ GPS coordinate support (latitude, longitude, altitude)</li>
+<li>📍 Location-aware quality scoring for better duplicate selection</li>
+<li>🌍 Enhanced metadata with geographic context</li>
+<li>📊 Group statistics show GPS data availability</li>
+<li>🔄 Distance calculations between geotagged duplicates</li>
+</ul>
+
+<h3>Features from v5.0:</h3>
+<ul>
+<li>🎉 WORKING moveimages functionality</li>
+<li>✅ True moves - duplicates removed from source albums</li>
+<li>✅ No manual cleanup needed - fully automated</li>
+<li>✅ SmugMug API v2 compliant with proper parameters</li>
+<li>🔄 Enhanced error handling and verification</li>
+</ul>
+
+<h3>Core Features:</h3>
+<ul>
+<li>MD5-based duplicate detection across albums</li>
+<li>PyQt6 modern GUI interface</li>
+<li>Automatic review album creation</li>
+<li>OAuth1 authentication with redirect handling</li>
+<li>Comprehensive duplicate management workflow</li>
+</ul>
+
+<p
