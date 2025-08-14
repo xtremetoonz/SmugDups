@@ -1,7 +1,8 @@
+# -*- coding: utf-8 -*-
 """
 Main application window for SmugDups v5.1
 File: gui/main_window.py
-UPDATED: v5.1 with GPS coordinate support and enhanced UI messaging
+UPDATED: v5.1 with GPS coordinate support and Unicode-safe encoding
 """
 
 from typing import List
@@ -153,6 +154,26 @@ class SmugDupsMainWindow(QMainWindow):
                 selection-background-color: #4c4c4c;
             }
         """)
+
+    def closeEvent(self, event):
+        """Handle application closing"""
+        if hasattr(self, 'finder_thread') and self.finder_thread.isRunning():
+            reply = QMessageBox.question(
+                self, 
+                'Exit SmugDups', 
+                'A scan is currently in progress. Are you sure you want to exit?',
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.No
+            )
+            
+            if reply == QMessageBox.StandardButton.Yes:
+                self.finder_thread.terminate()
+                self.finder_thread.wait()
+                event.accept()
+            else:
+                event.ignore()
+        else:
+            event.accept()
     
     def _create_menu_bar(self):
         """Create application menu bar"""
@@ -194,18 +215,18 @@ class SmugDupsMainWindow(QMainWindow):
         layout = QHBoxLayout(panel)
         layout.setContentsMargins(10, 5, 10, 5)
         
-        self.refresh_button = QPushButton("🔄 Refresh Albums")
+        self.refresh_button = QPushButton("Refresh Albums")
         self.refresh_button.clicked.connect(self._load_albums)
         self.refresh_button.setMinimumHeight(35)
         layout.addWidget(self.refresh_button)
         
-        self.scan_button = QPushButton("🔍 Scan for Duplicates")
+        self.scan_button = QPushButton("Scan for Duplicates")
         self.scan_button.clicked.connect(self._start_duplicate_scan)
         self.scan_button.setMinimumHeight(35)
         self.scan_button.setEnabled(False)
         layout.addWidget(self.scan_button)
         
-        exit_button = QPushButton("❌ Exit")
+        exit_button = QPushButton("Exit")
         exit_button.clicked.connect(self.close)
         exit_button.setMinimumHeight(35)
         exit_button.setStyleSheet("""
@@ -257,12 +278,12 @@ class SmugDupsMainWindow(QMainWindow):
         
         self.sort_combo = QComboBox()
         self.sort_combo.addItems([
-            "📁 Alphabetical (A-Z)",
-            "📁 Alphabetical (Z-A)", 
-            "📊 Most Photos First",
-            "📊 Fewest Photos First",
-            "📅 Newest First",
-            "📅 Oldest First"
+            "Alphabetical (A-Z)",
+            "Alphabetical (Z-A)", 
+            "Most Photos First",
+            "Fewest Photos First",
+            "Newest First",
+            "Oldest First"
         ])
         self.sort_combo.currentTextChanged.connect(self._sort_albums)
         layout.addWidget(self.sort_combo)
@@ -299,31 +320,31 @@ class SmugDupsMainWindow(QMainWindow):
         layout = QVBoxLayout(widget)
         layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
         
-        welcome_label = QLabel("🏠 Welcome to SmugDups v5.1")
+        welcome_label = QLabel("Welcome to SmugDups v5.1")
         welcome_label.setStyleSheet("font-size: 24px; font-weight: bold; margin: 20px;")
         welcome_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(welcome_label)
         
         instructions = QLabel("""
-📋 Instructions:
+Instructions:
 
 1. Albums are loading automatically...
 2. Select albums from the left panel (or click "All")
-3. Click "🔍 Scan for Duplicates" to find duplicate photos
+3. Click "Scan for Duplicates" to find duplicate photos
 4. Review and manage duplicates when found
 
-🎉 NEW in v5.1: GPS Coordinate Support!
-   🗺️ Displays latitude, longitude, and altitude when available
-   📍 Location-aware quality scoring for better duplicate selection
-   🌍 Enhanced metadata with geographic context
-   📊 Group statistics show GPS data availability
+NEW in v5.1: GPS Coordinate Support!
+   * Displays latitude, longitude, and altitude when available
+   * Location-aware quality scoring for better duplicate selection
+   * Enhanced metadata with geographic context
+   * Group statistics show GPS data availability
 
-✅ All v5.0 Features Preserved:
-   ✅ WORKING moveimages functionality - true moves!
-   ✅ No manual cleanup needed - fully automated!
-   ✅ SmugMug API v2 compliant with proper parameters
+All v5.0 Features Preserved:
+   * WORKING moveimages functionality - true moves!
+   * No manual cleanup needed - fully automated!
+   * SmugMug API v2 compliant with proper parameters
 
-🔍 Tip: Start with smaller albums first to test the process!
+Tip: Start with smaller albums first to test the process!
 Perfect for travel photographers who geotag their work!
         """)
         instructions.setStyleSheet("font-size: 14px; line-height: 1.5; color: #cccccc; max-width: 500px;")
@@ -590,7 +611,7 @@ Perfect for travel photographers who geotag their work!
         layout = QVBoxLayout(no_dupes_widget)
         layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
         
-        message = QLabel("🎉 No Duplicates Found!")
+        message = QLabel("No Duplicates Found!")
         message.setStyleSheet("font-size: 24px; font-weight: bold; color: #4CAF50; margin: 20px;")
         message.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(message)
@@ -613,19 +634,19 @@ Perfect for travel photographers who geotag their work!
         waste_mb = total_waste / (1024 * 1024)
         total_with_gps = sum(1 for group in duplicate_groups for photo in group if photo.has_location())
         
-        gps_text = f" • {total_with_gps} photos with GPS data" if total_with_gps > 0 else ""
+        gps_text = f" * {total_with_gps} photos with GPS data" if total_with_gps > 0 else ""
         
-        header = QLabel(f"🔍 Found {len(duplicate_groups)} duplicate groups ({total_duplicates} duplicates wasting {waste_mb:.1f} MB{gps_text})")
+        header = QLabel(f"Found {len(duplicate_groups)} duplicate groups ({total_duplicates} duplicates wasting {waste_mb:.1f} MB{gps_text})")
         header.setStyleSheet("font-size: 18px; font-weight: bold; color: #ff6b6b; margin: 10px; padding: 10px; background-color: #3c3c3c; border-radius: 5px;")
         container_layout.addWidget(header)
         
         # Add instruction text
-        instruction = QLabel("👆 Review each group below. Use the radio buttons to select which copy to KEEP, then choose an action.")
+        instruction = QLabel("Review each group below. Use the radio buttons to select which copy to KEEP, then choose an action.")
         instruction.setStyleSheet("font-size: 14px; color: #cccccc; margin: 5px 10px; padding: 8px; background-color: #2e2e2e; border-radius: 3px;")
         container_layout.addWidget(instruction)
         
         # Add feature highlight
-        feature_highlight = QLabel("🎉 SmugDups v5.1: GPS coordinate support + working moveimages - True moves with no manual cleanup needed!")
+        feature_highlight = QLabel("SmugDups v5.1: GPS coordinate support + working moveimages - True moves with no manual cleanup needed!")
         feature_highlight.setStyleSheet("font-size: 13px; color: #4CAF50; margin: 5px 10px; padding: 6px; background-color: #1b5e20; border-radius: 3px; border: 1px solid #4CAF50;")
         container_layout.addWidget(feature_highlight)
         
@@ -668,7 +689,37 @@ Perfect for travel photographers who geotag their work!
         """Show about dialog"""
         about_text = """
 <h2>SmugDups v5.1</h2>
-        <p><i>Version 5.1 - 2025</i></p>
+<p><b>SmugMug Duplicate Photo Manager</b></p>
+<p>Advanced duplicate photo detection and management for SmugMug accounts with working moveimages functionality and GPS coordinate support.</p>
+
+<h3>New in Version 5.1:</h3>
+<ul>
+<li>GPS coordinate support (latitude, longitude, altitude)</li>
+<li>Location-aware quality scoring for better duplicate selection</li>
+<li>Enhanced metadata with geographic context</li>
+<li>Group statistics show GPS data availability</li>
+<li>Distance calculations between geotagged duplicates</li>
+</ul>
+
+<h3>Features from v5.0:</h3>
+<ul>
+<li>WORKING moveimages functionality</li>
+<li>True moves - duplicates removed from source albums</li>
+<li>No manual cleanup needed - fully automated</li>
+<li>SmugMug API v2 compliant with proper parameters</li>
+<li>Enhanced error handling and verification</li>
+</ul>
+
+<h3>Core Features:</h3>
+<ul>
+<li>MD5-based duplicate detection across albums</li>
+<li>PyQt6 modern GUI interface</li>
+<li>Automatic review album creation</li>
+<li>OAuth1 authentication with redirect handling</li>
+<li>Comprehensive duplicate management workflow</li>
+</ul>
+
+<p><i>Version 5.1 - 2025</i></p>
         """
         
         msg = QMessageBox()
@@ -683,6 +734,7 @@ Perfect for travel photographers who geotag their work!
             QMessageBox QPushButton {
                 background-color: #3c3c3c;
                 border: 1px solid #555555;
+                border: 1px solid #555555;
                 padding: 8px 16px;
                 border-radius: 4px;
                 min-width: 80px;
@@ -692,18 +744,18 @@ Perfect for travel photographers who geotag their work!
             }
         """)
         msg.exec()
-    
+
     def closeEvent(self, event):
         """Handle application closing"""
         if hasattr(self, 'finder_thread') and self.finder_thread.isRunning():
             reply = QMessageBox.question(
-                self, 
-                'Exit SmugDups', 
+                self,
+                'Exit SmugDups',
                 'A scan is currently in progress. Are you sure you want to exit?',
                 QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
                 QMessageBox.StandardButton.No
             )
-            
+
             if reply == QMessageBox.StandardButton.Yes:
                 self.finder_thread.terminate()
                 self.finder_thread.wait()
@@ -711,34 +763,4 @@ Perfect for travel photographers who geotag their work!
             else:
                 event.ignore()
         else:
-            event.accept()<b>SmugMug Duplicate Photo Manager</b></p>
-<p>Advanced duplicate photo detection and management for SmugMug accounts with working moveimages functionality and GPS coordinate support.</p>
-
-<h3>New in Version 5.1:</h3>
-<ul>
-<li>🗺️ GPS coordinate support (latitude, longitude, altitude)</li>
-<li>📍 Location-aware quality scoring for better duplicate selection</li>
-<li>🌍 Enhanced metadata with geographic context</li>
-<li>📊 Group statistics show GPS data availability</li>
-<li>🔄 Distance calculations between geotagged duplicates</li>
-</ul>
-
-<h3>Features from v5.0:</h3>
-<ul>
-<li>🎉 WORKING moveimages functionality</li>
-<li>✅ True moves - duplicates removed from source albums</li>
-<li>✅ No manual cleanup needed - fully automated</li>
-<li>✅ SmugMug API v2 compliant with proper parameters</li>
-<li>🔄 Enhanced error handling and verification</li>
-</ul>
-
-<h3>Core Features:</h3>
-<ul>
-<li>MD5-based duplicate detection across albums</li>
-<li>PyQt6 modern GUI interface</li>
-<li>Automatic review album creation</li>
-<li>OAuth1 authentication with redirect handling</li>
-<li>Comprehensive duplicate management workflow</li>
-</ul>
-
-<p
+            event.accept()
