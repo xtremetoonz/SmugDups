@@ -3,6 +3,7 @@
 SmugDups - SmugMug Duplicate Photo Manager v5.1
 File: main.py
 Entry point for the SmugDups application - NOW WITH GPS COORDINATE SUPPORT!
+FIXED: Cross-platform Unicode compatibility
 """
 
 import sys
@@ -31,7 +32,11 @@ def main():
     sys.exit(app.exec())
 
 if __name__ == "__main__":
-    print("🚀 Starting SmugDups v5.1 - SmugMug Duplicate Photo Manager")
-    print("✅ Now with WORKING moveimages functionality!")
-    print("🗺️ NEW: GPS coordinate support for location-aware duplicate management!")
+    # Cross-platform compatible startup messages (no emoji)
+    print("="*60)
+    print("Starting SmugDups v5.1 - SmugMug Duplicate Photo Manager")
+    print("Features: WORKING moveimages functionality!")
+    print("NEW: GPS coordinate support for location-aware duplicate management!")
+    print("FIXED: Radio button selection now works properly!")
+    print("="*60)
     main()

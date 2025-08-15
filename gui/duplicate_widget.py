@@ -1,7 +1,7 @@
 """
 Widget to display and manage a group of duplicate photos for SmugDups v5.1
 File: gui/duplicate_widget.py
-FINAL CLEAN VERSION: Always visible metadata, no expandable sections
+FIXED: Radio button selection now works properly
 """
 
 from typing import List, Optional
@@ -15,7 +15,7 @@ from core.models import DuplicatePhoto
 from .photo_preview import PhotoPreviewWidget
 
 class DuplicateGroupWidget(QWidget):
-    """Widget to display and manage a group of duplicate photos - SmugDups v5.1 Final"""
+    """Widget to display and manage a group of duplicate photos - SmugDups v5.1 FIXED"""
     
     selection_changed = pyqtSignal()
     
@@ -137,14 +137,13 @@ class DuplicateGroupWidget(QWidget):
         return scroll_area
     
     def _create_photo_card(self, photo: DuplicatePhoto, index: int) -> QWidget:
-        """Create a card widget for a single photo"""
+        """Create a card widget for a single photo - FIXED radio button behavior"""
         card = QWidget()
         card.setFixedWidth(320)
         
-        # Larger height to accommodate always-visible metadata
+        # Calculate height based on metadata
         base_height = 650
         if photo.has_enhanced_metadata():
-            # Add extra height based on amount of metadata
             extra_height = 50
             if photo.has_caption():
                 extra_height += 60
@@ -152,58 +151,44 @@ class DuplicateGroupWidget(QWidget):
                 extra_height += 40 + (len(photo.get_keywords_list()) // 3) * 25
             if photo.has_date_taken():
                 extra_height += 70
+            if photo.has_location():
+                extra_height += 50
             base_height += extra_height
         
         card.setMinimumHeight(base_height)
         
-        # Card styling based on selection state
-        base_style = """
-            QWidget {
-                background-color: #3c3c3c;
-                border-radius: 8px;
-                margin: 5px;
-            }
-        """
-        
-        if photo.keep:
-            card.setStyleSheet(base_style + """
-                QWidget {
-                    border: 2px solid #4CAF50;
-                    background-color: #404040;
-                }
-            """)
-        else:
-            card.setStyleSheet(base_style + """
-                QWidget {
-                    border: 2px solid #555555;
-                }
-            """)
+        # Store reference for later styling updates
+        card.setProperty("photo_index", index)
         
         layout = QVBoxLayout(card)
         layout.setSpacing(8)
         layout.setContentsMargins(10, 10, 10, 10)
         
-        # Radio button for selection
-        radio_text = "✓ Keep this copy"
+        # FIXED: Radio button creation with proper signal handling
+        radio_text = "✅ Keep this copy"
         if photo.keep:
             score = photo.get_quality_score()
             if score >= 8:
-                radio_text = "✓ Keep this copy (recommended - high quality)"
+                radio_text = "✅ Keep this copy (recommended - high quality)"
             elif score >= 5:
-                radio_text = "✓ Keep this copy (recommended)"
+                radio_text = "✅ Keep this copy (recommended)"
+        else:
+            radio_text = "📦 Move to review album"
         
         radio = QRadioButton(radio_text)
+        
+        # CRITICAL FIX: Set initial state BEFORE adding to group and connecting signals
         radio.setChecked(photo.keep)
-        radio.toggled.connect(self._on_selection_changed)
         
-        radio_style = "font-weight: bold; font-size: 12px;"
-        if photo.keep:
-            radio_style += " color: #4CAF50;"
-        else:
-            radio_style += " color: #cccccc;"
-        
-        radio.setStyleSheet(radio_style)
+        # Add to button group with index
         self.button_group.addButton(radio, index)
+        
+        # Connect signal AFTER setup is complete - use lambda to pass index
+        radio.toggled.connect(lambda checked, idx=index: self._on_radio_toggled(checked, idx))
+        
+        # Set styling
+        self._update_radio_button_styling(radio, photo.keep)
+        
         self.radio_buttons.append(radio)
         layout.addWidget(radio)
         
@@ -221,7 +206,97 @@ class DuplicateGroupWidget(QWidget):
         
         layout.addStretch(1)
         
+        # Set initial card styling
+        self._update_card_styling_direct(card, photo.keep)
+        
         return card
+
+    def _on_radio_toggled(self, checked: bool, index: int):
+        """Handle individual radio button toggle - FIXED version"""
+        if not checked:  # Ignore unchecked events to avoid double processing
+            return
+            
+        print(f"📻 Radio button {index} selected for {self.duplicates[index].filename}")
+        
+        # Update all photos in the group
+        for i, photo in enumerate(self.duplicates):
+            was_selected = photo.keep
+            photo.keep = (i == index)
+            
+            # Update visual styling if state changed
+            if was_selected != photo.keep:
+                self._update_photo_card_styling(i)
+        
+        # Update all radio button text and styling
+        self._update_all_radio_buttons()
+        
+        # Emit the selection changed signal
+        self.selection_changed.emit()
+        
+        print(f"✅ Selection updated: keeping {self.duplicates[index].filename}")
+
+    def _update_photo_card_styling(self, card_index: int):
+        """Update visual styling of a photo card based on selection state"""
+        try:
+            photo = self.duplicates[card_index]
+            radio = self.radio_buttons[card_index]
+            card = radio.parent()
+            
+            self._update_card_styling_direct(card, photo.keep)
+            self._update_radio_button_styling(radio, photo.keep)
+            
+        except Exception as e:
+            print(f"Error updating card styling for index {card_index}: {e}")
+
+    def _update_card_styling_direct(self, card: QWidget, is_selected: bool):
+        """Update card styling directly"""
+        base_style = """
+            QWidget {
+                background-color: #3c3c3c;
+                border-radius: 8px;
+                margin: 5px;
+            }
+        """
+        
+        if is_selected:
+            card.setStyleSheet(base_style + """
+                QWidget {
+                    border: 2px solid #4CAF50;
+                    background-color: #404040;
+                }
+            """)
+        else:
+            card.setStyleSheet(base_style + """
+                QWidget {
+                    border: 2px solid #555555;
+                }
+            """)
+
+    def _update_radio_button_styling(self, radio: QRadioButton, is_selected: bool):
+        """Update radio button styling"""
+        if is_selected:
+            radio.setStyleSheet("font-weight: bold; font-size: 12px; color: #4CAF50;")
+        else:
+            radio.setStyleSheet("font-weight: bold; font-size: 12px; color: #cccccc;")
+
+    def _update_all_radio_buttons(self):
+        """Update all radio button text and styling to reflect current selection state"""
+        try:
+            for i, (radio, photo) in enumerate(zip(self.radio_buttons, self.duplicates)):
+                if photo.keep:
+                    score = photo.get_quality_score()
+                    if score >= 8:
+                        radio.setText("✅ Keep this copy (recommended - high quality)")
+                    elif score >= 5:
+                        radio.setText("✅ Keep this copy (recommended)")
+                    else:
+                        radio.setText("✅ Keep this copy")
+                    self._update_radio_button_styling(radio, True)
+                else:
+                    radio.setText("📦 Move to review album")
+                    self._update_radio_button_styling(radio, False)
+        except Exception as e:
+            print(f"Error updating radio button text: {e}")
     
     def _create_all_metadata(self, photo: DuplicatePhoto) -> QWidget:
         """Create metadata display with all information always visible"""
@@ -255,7 +330,7 @@ class DuplicateGroupWidget(QWidget):
 
         # Add GPS coordinates to basic info if available
         if photo.has_location():
-            location_line = f"📍 {photo.get_location_short()}"
+            location_line = f"🗺️ {photo.get_location_short()}"
             info_lines.append(location_line)
         
         # Add file size and date
@@ -311,7 +386,6 @@ class DuplicateGroupWidget(QWidget):
             if photo.has_location():
                 location_section = self._create_location_section(photo)
                 layout.addWidget(location_section)
-
             
             # Caption section
             if photo.has_caption():
@@ -389,6 +463,61 @@ class DuplicateGroupWidget(QWidget):
         """)
         
         layout.addWidget(date_widget)
+        return container
+    
+    def _create_location_section(self, photo: DuplicatePhoto) -> QWidget:
+        """Create location/GPS section"""
+        container = QWidget()
+        layout = QVBoxLayout(container)
+        layout.setSpacing(3)
+        layout.setContentsMargins(0, 0, 0, 0)
+
+        # Header
+        header = QLabel("🗺️ Location:")
+        header.setStyleSheet("""
+            font-size: 10px; font-weight: bold; color: #ffffff;
+            background-color: rgba(70, 70, 70, 0.8); padding: 3px 6px;
+            border-radius: 3px; margin-bottom: 2px;
+        """)
+        layout.addWidget(header)
+
+        # Location details
+        location_widget = QFrame()
+        location_layout = QVBoxLayout(location_widget)
+        location_layout.setSpacing(2)
+        location_layout.setContentsMargins(6, 4, 6, 4)
+
+        # GPS coordinates
+        coords_lbl = QLabel(f"🗺️ {photo.get_location_short()}")
+        coords_lbl.setStyleSheet("""
+            font-size: 9px; color: #ffffff; padding: 2px;
+            background-color: rgba(60, 60, 60, 0.8); border-radius: 2px;
+            font-family: monospace;
+        """)
+        location_layout.addWidget(coords_lbl)
+
+        # Altitude if available
+        if photo.altitude is not None:
+            if photo.altitude >= 0:
+                alt_text = f"⛰️ {photo.altitude:.0f}m above sea level"
+            else:
+                alt_text = f"🌊 {abs(photo.altitude):.0f}m below sea level"
+
+            alt_lbl = QLabel(alt_text)
+            alt_lbl.setStyleSheet("""
+                font-size: 9px; color: #ffffff; padding: 2px;
+                background-color: rgba(60, 60, 60, 0.8); border-radius: 2px;
+            """)
+            location_layout.addWidget(alt_lbl)
+
+        location_widget.setStyleSheet("""
+            QFrame {
+                background-color: rgba(45, 45, 45, 0.9); border: 1px solid #555555;
+                border-radius: 3px; border-left: 3px solid #4CAF50; margin: 1px;
+            }
+        """)
+
+        layout.addWidget(location_widget)
         return container
     
     def _create_caption_section(self, photo: DuplicatePhoto) -> QWidget:
@@ -554,12 +683,6 @@ class DuplicateGroupWidget(QWidget):
         button_layout.addStretch()
         return button_layout
     
-    def _on_selection_changed(self):
-        """Handle radio button selection change"""
-        for i, radio in enumerate(self.radio_buttons):
-            self.duplicates[i].keep = radio.isChecked()
-        self.selection_changed.emit()
-    
     # Action Methods
     def move_selected_to_review_action(self):
         """Move duplicates to review album using working moveimages"""
@@ -591,7 +714,7 @@ class DuplicateGroupWidget(QWidget):
             else:
                 photos_to_move = self.duplicates.copy()
                 action_description = f"Multiple photos selected (unusual). Moving all {len(photos_to_move)} photos to review album."
-                print(f"⚠️  {action_description}")
+                print(f"⚠️ {action_description}")
             
             if not photos_to_move:
                 self.show_feedback("✅ No photos need to be moved - all duplicates are selected to keep", True)
@@ -632,7 +755,7 @@ class DuplicateGroupWidget(QWidget):
             if successful > 0:
                 if failed > 0:
                     success_msg = f"✅ Moved {successful}/{successful + failed} photos to {album_name}"
-                    print(f"⚠️  {failed} photos failed to move - see console for details")
+                    print(f"⚠️ {failed} photos failed to move - see console for details")
                 else:
                     success_msg = f"🎉 All {successful} photos moved to {album_name}!"
                 
@@ -680,14 +803,14 @@ class DuplicateGroupWidget(QWidget):
         photos_to_delete = [photo for photo in self.duplicates if not photo.keep]
         photos_to_keep = [photo for photo in self.duplicates if photo.keep]
         
-        print(f"\n🗑️  PERMANENT DELETION STARTING...")
+        print(f"\n🗑️ PERMANENT DELETION STARTING...")
         print(f"Will delete {to_delete_count} photos, keeping 1")
         
         for photo in photos_to_keep:
             print(f"  ✅ KEEP: {photo.filename} from {photo.album_name} (ID: {photo.image_id})")
         
         for photo in photos_to_delete:
-            print(f"  🗑️  DELETE: {photo.filename} from {photo.album_name} (ID: {photo.image_id})")
+            print(f"  🗑️ DELETE: {photo.filename} from {photo.album_name} (ID: {photo.image_id})")
         
         self.show_feedback(f"🔄 Deleting {to_delete_count} duplicate photo(s)...", None)
         
@@ -848,57 +971,20 @@ class DuplicateGroupWidget(QWidget):
             QPushButton:pressed { background-color: #8c8c8c; }
         """
 
-    def _create_location_section(self, photo: DuplicatePhoto) -> QWidget:
-        """Create location/GPS section"""
-        container = QWidget()
-        layout = QVBoxLayout(container)
-        layout.setSpacing(3)
-        layout.setContentsMargins(0, 0, 0, 0)
-
-        # Header
-        header = QLabel("📍 Location:")
-        header.setStyleSheet("""
-        font-size: 10px; font-weight: bold; color: #ffffff;
-        background-color: rgba(70, 70, 70, 0.8); padding: 3px 6px;
-        border-radius: 3px; margin-bottom: 2px;
-        """)
-        layout.addWidget(header)
-
-        # Location details
-        location_widget = QFrame()
-        location_layout = QVBoxLayout(location_widget)
-        location_layout.setSpacing(2)
-        location_layout.setContentsMargins(6, 4, 6, 4)
-
-        # GPS coordinates
-        coords_lbl = QLabel(f"📐 {photo.get_location_short()}")
-        coords_lbl.setStyleSheet("""
-        font-size: 9px; color: #ffffff; padding: 2px;
-        background-color: rgba(60, 60, 60, 0.8); border-radius: 2px;
-        font-family: monospace;
-        """)
-        location_layout.addWidget(coords_lbl)
-
-        # Altitude if available
-        if photo.altitude is not None:
-            if photo.altitude >= 0:
-                alt_text = f"⛰️ {photo.altitude:.0f}m above sea level"
+    # DEBUGGING METHOD
+    def debug_radio_state(self):
+        """Debug method to check radio button and photo state alignment"""
+        print(f"\n🔍 DEBUG: Radio button state for group with {len(self.duplicates)} photos:")
+        for i, (radio, photo) in enumerate(zip(self.radio_buttons, self.duplicates)):
+            radio_checked = radio.isChecked()
+            photo_keep = photo.keep
+            match = "✅" if radio_checked == photo_keep else "❌"
+            print(f"  {i}: {photo.filename[:30]:<30} Radio:{radio_checked} Photo:{photo_keep} {match}")
+        
+        # Check button group state
+        checked_button = self.button_group.checkedButton()
+        if checked_button:
+            checked_index = self.button_group.id(checked_button)
+            print(f"  ButtonGroup selected index: {checked_index}")
         else:
-            alt_text = f"🌊 {abs(photo.altitude):.0f}m below sea level"
-
-        alt_lbl = QLabel(alt_text)
-        alt_lbl.setStyleSheet("""
-            font-size: 9px; color: #ffffff; padding: 2px;
-            background-color: rgba(60, 60, 60, 0.8); border-radius: 2px;
-        """)
-        location_layout.addWidget(alt_lbl)
-
-        location_widget.setStyleSheet("""
-        QFrame {
-            background-color: rgba(45, 45, 45, 0.9); border: 1px solid #555555;
-            border-radius: 3px; border-left: 3px solid #4CAF50; margin: 1px;
-        }
-        """)
-
-        layout.addWidget(location_widget)
-        return container
+            print(f"  ButtonGroup: No button selected")

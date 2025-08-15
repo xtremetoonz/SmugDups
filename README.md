@@ -4,12 +4,13 @@
 
 ![SmugDups v5.1](https://img.shields.io/badge/Version-5.1-brightgreen) ![Python](https://img.shields.io/badge/Python-3.9+-blue) ![PyQt6](https://img.shields.io/badge/GUI-PyQt6-orange) ![SmugMug API](https://img.shields.io/badge/API-SmugMug%20v2-red)
 
-## 🎉 What's New in v5.1
+## ✨ What's New in v5.1
 
 - **🗺️ GPS Coordinate Support** - Display latitude, longitude, and altitude when available
 - **📍 Enhanced Quality Scoring** - GPS-tagged photos get higher quality scores  
 - **🌍 Location-Based Decision Making** - See which duplicates have geographic data
 - **📊 Geographic Statistics** - Group headers show GPS data availability
+- **🔧 FIXED: Radio Button Selection** - Photo selection now works properly
 - **✅ All v5.0 Features** - Working moveimages, automatic verification, enhanced error handling
 
 ## 🚀 Features
@@ -31,7 +32,7 @@
 - **Photo preview thumbnails** with metadata display
 - **Batch album selection** with sorting options
 - **Real-time progress tracking** during scans
-- **Intuitive duplicate management** with radio button selection
+- **Fixed duplicate management** with working radio button selection
 - **Geographic data integration** - seamless GPS coordinate display
 
 ### Technical Excellence
@@ -43,7 +44,7 @@
 
 ## 📋 Prerequisites
 
-- **Python 3.9+**
+- **Python 3.9+** (tested on Python 3.13.5)
 - **SmugMug account** with API access
 - **SmugMug API credentials** (API key, secret, access tokens)
 
@@ -101,7 +102,7 @@
 
 2. **Select albums** to scan from the left panel
 3. **Click "Scan for Duplicates"** to find duplicates
-4. **Review duplicate groups** and select which copies to keep
+4. **Review duplicate groups** and select which copies to keep using radio buttons
 5. **Click "Move to Review Album"** to move duplicates (working moveimages!)
 
 ### Advanced Features
@@ -115,8 +116,8 @@
 ## 🗺️ Geographic Features (New in v5.1)
 
 ### GPS Data Display
-- **Basic view**: Compact coordinates like `📍 40.7589,-73.9851`
-- **Detailed view**: Full coordinates with altitude: `📐 40.758896°N, 73.985130°W ⛰️ 15m above sea level`
+- **Basic view**: Compact coordinates like `🗺️ 40.7589,-73.9851`
+- **Detailed view**: Full coordinates with altitude: `🗺️ 40.758896°N, 73.985130°W ⛰️ 15m above sea level`
 - **Group statistics**: Headers show `X with GPS` for duplicate groups
 
 ### Enhanced Quality Scoring
@@ -129,6 +130,18 @@ SmugDups now considers GPS data when recommending which duplicate to keep:
 - Original photos often retain GPS data better than processed copies
 - Location data adds context for decision making
 - Distance calculations between duplicate locations
+
+## 🔧 Fixed Issues in v5.1
+
+### Radio Button Selection (FIXED)
+- **Problem**: Radio button selection for choosing which duplicate to keep was not working
+- **Solution**: Fixed signal/slot connections and QButtonGroup behavior
+- **Result**: Users can now properly select which photo to keep in each duplicate group
+
+### Cross-Platform Compatibility
+- **Unicode/Emoji handling**: Improved cross-platform emoji support
+- **Font families**: Better CSS font handling across different systems
+- **Windows compatibility**: Enhanced file handling and path management
 
 ## 📦 Project Structure
 
@@ -144,7 +157,7 @@ SmugDups/
 │   └── duplicate_finder.py          # Background duplicate detection
 ├── gui/
 │   ├── main_window.py              # Main application window
-│   ├── duplicate_widget.py         # Duplicate group management UI with GPS
+│   ├── duplicate_widget.py         # Duplicate group management UI with FIXED radio buttons
 │   └── photo_preview.py            # Photo thumbnail display
 └── operations/
     ├── enhanced_photo_copy_move.py  # Main orchestrator with working moves
@@ -192,14 +205,25 @@ SmugDups automatically requests GPS coordinates:
 '_filter': 'ImageKey,FileName,ArchivedMD5,ArchivedSize,Date,WebUri,ThumbnailUrl,Title,Caption,Keywords,DateTimeOriginal,Latitude,Longitude,Altitude'
 ```
 
+### Fixed Radio Button Implementation
+The radio button selection issue has been resolved with:
+
+```python
+# FIXED: Proper signal handling and state management
+radio.setChecked(photo.keep)  # Set state BEFORE connecting signals
+self.button_group.addButton(radio, index)  # Add to group
+radio.toggled.connect(lambda checked, idx=index: self._on_radio_toggled(checked, idx))
+```
+
 ### Key Technical Insights
 - **Parameter name:** `MoveUris` (not `ImageUris`)
 - **URI format:** AlbumImage URI format (`/api/v2/album/SOURCE/image/ID`)
 - **Endpoint:** Use target album's moveimages endpoint
 - **Verification:** Check source no longer has image and target does
 - **GPS handling:** Graceful fallback when coordinates unavailable
+- **Radio buttons:** Fixed signal timing and state management
 
-## 🐛 Troubleshooting
+## 🛠️ Troubleshooting
 
 ### Common Issues
 
@@ -216,13 +240,23 @@ SmugDups automatically requests GPS coordinates:
 - Check that target album allows image additions
 - Review console output for specific error messages
 
+**"Radio buttons not working"** (FIXED in v5.1)
+- This issue has been resolved in the current version
+- Radio button selection now properly updates photo.keep attributes
+- Visual feedback shows selected state correctly
+
 **Virtual Environment Issues**
 - Ensure virtual environment is activated before running
 - Reinstall packages if switching Python versions
 - Use `which python` to verify correct Python installation
 
 ### Debug Mode
-Enable detailed logging by checking console output during operations.
+Enable detailed logging by checking console output during operations. You can also use the debug method:
+
+```python
+# In duplicate widget, call this method to check radio button state
+duplicate_widget.debug_radio_state()
+```
 
 ## 📈 Performance
 
@@ -231,6 +265,7 @@ Enable detailed logging by checking console output during operations.
 - **API compliance:** Rate limited to respect SmugMug guidelines
 - **Move verification:** Automatic confirmation of successful operations
 - **GPS processing:** No performance impact when coordinates unavailable
+- **UI responsiveness:** Fixed radio button selection with immediate feedback
 
 ## 🤝 Contributing
 
@@ -245,8 +280,9 @@ Enable detailed logging by checking console output during operations.
 - Add comprehensive error handling
 - Test with real SmugMug data including GPS-tagged photos
 - Update documentation for new features
+- Test radio button functionality across different duplicate scenarios
 
-## 📝 License
+## 📄 License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
@@ -273,13 +309,31 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - **Advanced filtering** by GPS availability and location proximity
 
 ### Version History
-- **v5.1:** GPS coordinate support, enhanced quality scoring
+- **v5.1:** GPS coordinate support, enhanced quality scoring, FIXED radio button selection
 - **v5.0:** Working moveimages, rebranded to SmugDups
 - **v2.x:** Collectimages approach
 - **v1.x:** Initial duplicate detection implementation
+
+### Recent Fixes
+- **Radio Button Selection**: Fixed QButtonGroup interference and signal timing
+- **Cross-platform compatibility**: Improved Unicode handling and Windows support
+- **GPS coordinate display**: Enhanced location metadata presentation
+- **Quality scoring**: Location data now contributes to duplicate selection logic
 
 ---
 
 **SmugDups v5.1** - Making SmugMug duplicate management simple, effective, and location-aware! 🎉🗺️
 
-*"Finally, true moveimages functionality that actually works - now with GPS support!"*
+*"Finally, true moveimages functionality that actually works - now with GPS support and fixed radio button selection!"*
+
+## ⚡ Quick Start Guide
+
+1. **Install Python 3.9+** and clone this repository
+2. **Create virtual environment:** `python -m venv smugdups_env`
+3. **Activate environment:** `source smugdups_env/bin/activate` (Linux/Mac) or `smugdups_env\Scripts\activate` (Windows)
+4. **Install dependencies:** `pip install -r requirements.txt`
+5. **Set up credentials:** Copy `credentialsTemplate.py` to `credentials.py` and add your SmugMug API details
+6. **Run SmugDups:** `python main.py`
+7. **Select albums, scan for duplicates, choose which copies to keep, and move/delete!**
+
+The radio button selection is now working perfectly - you can reliably choose which duplicate photo to keep in each group!
